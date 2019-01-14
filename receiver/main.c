@@ -1,7 +1,9 @@
-// MainsSensor ontvangende kant. TBD on what chip this is going to run. Mosquitto connectivity might be nice but that could be done with serial communication to something smarter but less realtime. At least a display or a few LED's that show which things are still powered.
+// MainsSensor receiver side POC. Runs on Atmega328, serial (or USB-serial) communication to something smarter, or maybe later port to ESP for MQTT conectivity.
+
 
 // TODO: split in a couple usefull .h's and a clearer main
 // TODO: develloped allong multiple lines of thinking, might be incomplete in serveral directions.
+// TODO: build the hw and test&improve
 
 #define F_CPU 16000000 // 16 Mhz. Default Atmega328
 #define numdevs 16     // number of devices to keep an eye on
@@ -10,7 +12,7 @@
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
-#define BAUD 9600
+#define BAUD 19200
 #include <util/setbaud.h> // uart baudrate helper
 
 enum status {ON,OFF,PRESUMED_OFF,NOTINUSE}; 
@@ -56,23 +58,7 @@ uint8_t foundit=0; //used as bool
     }
 }
 
-void CheckAllDev(void){
-    numOn=0; // reset for recount.
-    for(unsigned int i=0; i<numdevs; i++){
-        // if now overflowed. (TODO: Make it overflow every 2 mins or modify this to make it check for 2 mins since last message)
-	    if( (devices[i].lastseen>now) && devices[i].state!=NOTINUSE) devices[i].state=PRESUMED_OFF; 
-        //recount number of devices still on.        
-        if( devices[i].state==ON) numOn++;
-    }
-};
 
-/*
-uint8_t decodeReceived(uint16_t in) // machester encoded word to original byte. No error detection.
-{
-return (in&0x01)|(in&0x04)<<1|(in&0x10)<<2|(in&0x40)<<3|(in&0x100)<<4|(in&0x400)<<5|(in&0x1000)<<6|(in&0x4000)<<7;
-}
-// I now look for edges directly, so this is not needed: TODO: remove once certain about method of receiving
-*/ 
 
 void DisplayRefresh(void){
 // TODO: Transmit over serial: numon (number of devices still ON) and ID of all devices still on.
@@ -93,17 +79,26 @@ OCR0B = 200;       // 16Mhz/8/200=10kHz --- 100 us
 TIMSK0 = (1<<OCIE0A | 1<<OCIE0B); // enable both OC A and B interrupts.
 sei();             // enable global interrupts
 
-    // TODO: proces data received in interrupt once frame is complete.
+    // proces data received in interrupt once frame is complete.
     if(buffercount>0){
     updateDevice(ID,MSG);
     buffercount--;
     }    
-
-    if(now-prevnow > 10000){ //every second
+    
+    if(now-prevnow > 100){ //every second
         prevnow = now;
-        CheckAllDev();
+        
+        numOn=0; // reset for recount.
+        for(unsigned int i=0; i<numdevs; i++){
+        // if "now" overflowed (uint16_t MAX 65536, at 100 Hz that's slightly over a 10 minutes. A device should be able to send a message multiple times in 10 minutes.
+	        if( (devices[i].lastseen>now) && (devices[i].state!=NOTINUSE)) devices[i].state=PRESUMED_OFF; 
+        //recount number of devices still on.        
+            if( devices[i].state==ON) numOn++;
+        }
+
         DisplayRefresh(); // somehow weergeven welke devices nog aan staan.
     }   
+
 }
 
 
@@ -199,7 +194,12 @@ rec_tim++;
 }
 
 ISR(TIMER0_COMPB_vect){ // 16E6/8/200 = 10 kHz (100 us, for timekeeping)
-now++;
+static volatile uint8_t prescale = 0;
+    if(prescale>=100){
+    now++; // 100 Hz
+    prescale = 0;
+    }
+prescale++;
 }
 
 
