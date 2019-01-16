@@ -5,7 +5,8 @@
 // TODO: develloped allong multiple lines of thinking, might be incomplete in serveral directions.
 // TODO: build the hw and test&improve
 
-#define F_CPU 16000000 // 16 Mhz. Default Atmega328
+#define F_CPU 16000000 // 16 Mhz. 
+//(extern crystal, lfuse 0xF7, hfuse 0xD9, Efuse 0xFD)
 #define numdevs 16     // number of devices to keep an eye on
 
 
@@ -58,6 +59,16 @@ uint8_t foundit=0; //used as bool
     }
 }
 
+void ptchar(uint8_t c){
+while (~UCSR0A & 1<<UDRE0); // note: blocking wait!
+    UDR0=c;
+}
+
+void ptstr(char* str){
+    for(int i=0; str[i]!=0;i++){
+    ptchar(str[i]);
+    }
+}
 
 
 void DisplayRefresh(void){
@@ -65,12 +76,23 @@ void DisplayRefresh(void){
 // TODO: Display number of devices still on (either on a LED if numon>0, or on 7segment displays, or on a LCD)
 // TODO: Display device ID's still on.
 // TODO: Maybe even display device names for those ID's, but that would require a lookup table. That would need te be editable or known at compile time. Both difficult.
-
+ptstr("display refresh called!");
 }
 
 
 int main(void){
 uint16_t prevnow=0;
+
+//uart settings:
+UCSR0B = (1<<TXEN0);
+UBRR0H = UBRRH_VALUE;
+UBRR0L = UBRRL_VALUE;
+#if USE_2X
+UCSR0A |= (1 << U2X0);
+#else
+UCSR0A &= ~(1 << U2X0);
+#endif
+
 
 TCCR0A = 1<<WGM01; // CTC mode
 TCCR0B = 1<<CS01;  // clkIO/8 (16Mhz/8=2MHz)
@@ -79,26 +101,30 @@ OCR0B = 200;       // 16Mhz/8/200=10kHz --- 100 us
 TIMSK0 = (1<<OCIE0A | 1<<OCIE0B); // enable both OC A and B interrupts.
 sei();             // enable global interrupts
 
+
+ptstr("Hello World!");
+
+    while(1){
     // proces data received in interrupt once frame is complete.
-    if(buffercount>0){
-    updateDevice(ID,MSG);
-    buffercount--;
-    }    
+        if(buffercount>0){
+        updateDevice(ID,MSG);
+        buffercount--;
+        }    
     
-    if(now-prevnow > 100){ //every second
+        if(now-prevnow > 100){ //every second
         prevnow = now;
         
         numOn=0; // reset for recount.
-        for(unsigned int i=0; i<numdevs; i++){
-        // if "now" overflowed (uint16_t MAX 65536, at 100 Hz that's slightly over a 10 minutes. A device should be able to send a message multiple times in 10 minutes.
-	        if( (devices[i].lastseen>now) && (devices[i].state!=NOTINUSE)) devices[i].state=PRESUMED_OFF; 
-        //recount number of devices still on.        
-            if( devices[i].state==ON) numOn++;
+            for(unsigned int i=0; i<numdevs; i++){
+            // if "now" overflowed (uint16_t MAX 65536, at 100 Hz that's slightly over a 10 minutes. A device should be able to send a message multiple times in 10 minutes.
+	            if( (devices[i].lastseen>now) && (devices[i].state!=NOTINUSE)) devices[i].state=PRESUMED_OFF; 
+            //recount number of devices still on.        
+                if( devices[i].state==ON) numOn++;
         }
 
         DisplayRefresh(); // somehow weergeven welke devices nog aan staan.
-    }   
-
+        }      
+    }
 }
 
 
