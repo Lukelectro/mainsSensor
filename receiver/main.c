@@ -9,12 +9,13 @@
 //(extern crystal, lfuse 0xF7, hfuse 0xD9, Efuse 0xFD)
 #define numdevs 16     // number of devices to keep an eye on
 
-
+#include <stdlib.h>
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
-#define BAUD 19200
-#include <util/setbaud.h> // uart baudrate helper
+#include <avr/pgmspace.h>
+#include "./uartlibrary/uart.h"
+#define UART_BAUD_RATE      19200
 
 enum status {ON,OFF,PRESUMED_OFF,NOTINUSE}; 
 /* 
@@ -59,50 +60,36 @@ uint8_t foundit=0; //used as bool
     }
 }
 
-void ptchar(uint8_t c){
-while (~UCSR0A & 1<<UDRE0); // note: blocking wait!
-    UDR0=c;
-}
-
-void ptstr(char* str){
-    for(int i=0; str[i]!=0;i++){
-    ptchar(str[i]);
-    }
-}
-
 
 void DisplayRefresh(void){
 // TODO: Transmit over serial: numon (number of devices still ON) and ID of all devices still on.
 // TODO: Display number of devices still on (either on a LED if numon>0, or on 7segment displays, or on a LCD)
 // TODO: Display device ID's still on.
 // TODO: Maybe even display device names for those ID's, but that would require a lookup table. That would need te be editable or known at compile time. Both difficult.
-ptstr("display refresh called!");
+uart_puts_P("display refresh called!\n");
+uart_puts_P("NumOn: ");
+char buffer[7];
+itoa(numOn,buffer,10);
+uart_puts(buffer);
+uart_putc('\n');
 }
 
 
 int main(void){
 uint16_t prevnow=0;
 
-//uart settings:
-UCSR0B = (1<<TXEN0);
-UBRR0H = UBRRH_VALUE;
-UBRR0L = UBRRL_VALUE;
-#if USE_2X
-UCSR0A |= (1 << U2X0);
-#else
-UCSR0A &= ~(1 << U2X0);
-#endif
-
+uart_init( UART_BAUD_SELECT(UART_BAUD_RATE,F_CPU) ); 
 
 TCCR0A = 1<<WGM01; // CTC mode
 TCCR0B = 1<<CS01;  // clkIO/8 (16Mhz/8=2MHz)
 OCR0A = 100;       // 16MHz/8/100= 20kHz --- 50 us
 OCR0B = 200;       // 16Mhz/8/200=10kHz --- 100 us
 TIMSK0 = (1<<OCIE0A | 1<<OCIE0B); // enable both OC A and B interrupts.
-sei();             // enable global interrupts
+
+sei();             // enable global interrupts (For timers and uart.h)
 
 
-ptstr("Hello World!");
+uart_puts_P("Halloooooowtjuhs!!!!!111!\n");
 
     while(1){
     // proces data received in interrupt once frame is complete.
