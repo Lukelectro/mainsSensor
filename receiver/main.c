@@ -4,9 +4,10 @@
 // TODO: split in a couple usefull .h's and a clearer main
 // TODO: develloped allong multiple lines of thinking, might be incomplete in serveral directions.
 // TODO: build the hw and test&improve
+// TODO: test with gdb where it hangs as even the "Hello world" on start of main does not get printed. Possibly hangs in ISR?
 
 #define F_CPU 16000000 // 16 Mhz. 
-//(extern crystal, lfuse 0xF7, hfuse 0xD9, Efuse 0xFD)
+//(extern crystal, lfuse 0xF7, hfuse 0xD9 (0x99 to enable debugwire), Efuse 0xFD)
 #define numdevs 16     // number of devices to keep an eye on
 
 #include <stdlib.h>
@@ -15,7 +16,7 @@
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
 #include "./uartlibrary/uart.h"
-#define UART_BAUD_RATE      19200
+#define UART_BAUD_RATE 9600
 
 enum status {ON,OFF,PRESUMED_OFF,NOTINUSE}; 
 /* 
@@ -80,16 +81,15 @@ uint16_t prevnow=0;
 
 uart_init( UART_BAUD_SELECT(UART_BAUD_RATE,F_CPU) ); 
 
+sei();             // enable global interrupts (For timers and uart.h)
+uart_puts_P("Halloooooowtjuhs!!!!!111!\n"); //TODO: this does not get printed. Lets try before enabling timers?
+
 TCCR0A = 1<<WGM01; // CTC mode
 TCCR0B = 1<<CS01;  // clkIO/8 (16Mhz/8=2MHz)
 OCR0A = 100;       // 16MHz/8/100= 20kHz --- 50 us
 OCR0B = 200;       // 16Mhz/8/200=10kHz --- 100 us
 TIMSK0 = (1<<OCIE0A | 1<<OCIE0B); // enable both OC A and B interrupts.
 
-sei();             // enable global interrupts (For timers and uart.h)
-
-
-uart_puts_P("Halloooooowtjuhs!!!!!111!\n");
 
     while(1){
     // proces data received in interrupt once frame is complete.
@@ -107,7 +107,7 @@ uart_puts_P("Halloooooowtjuhs!!!!!111!\n");
 	            if( (devices[i].lastseen>now) && (devices[i].state!=NOTINUSE)) devices[i].state=PRESUMED_OFF; 
             //recount number of devices still on.        
                 if( devices[i].state==ON) numOn++;
-        }
+            }
 
         DisplayRefresh(); // somehow weergeven welke devices nog aan staan.
         }      
