@@ -4,7 +4,6 @@
 // TODO: split in a couple usefull .h's and a clearer main
 // TODO: develloped allong multiple lines of thinking, might be incomplete in serveral directions.
 // TODO: build the hw and test&improve
-// TODO: test with gdb where it hangs as even the "Hello world" on start of main does not get printed. Possibly hangs in ISR?
 
 #define F_CPU 16000000 // 16 Mhz. 
 //(extern crystal, lfuse 0xF7, hfuse 0xD9 (0x99 to enable debugwire), Efuse 0xFD)
@@ -16,14 +15,14 @@
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
 #include "./uartlibrary/uart.h"
-#define UART_BAUD_RATE 9600
+#define UART_BAUD_RATE 115200
 
-enum status {ON,OFF,PRESUMED_OFF,NOTINUSE}; 
+enum status {NOTINUSE=0, ON, OFF, PRESUMED_OFF}; 
 /* 
 ON: received "ON" message from ID. 
 OFF: Received OFF message from ID. 
 PRESUMED_OFF: Received no message from ID for 2 minutes.
-NOTINUSE: this device-status storage spot is not in use
+NOTINUSE: this device-status storage spot is not in use. This is 0 so this is the default
 */
 
 typedef struct{
@@ -63,16 +62,47 @@ uint8_t foundit=0; //used as bool
 
 
 void DisplayRefresh(void){
-// TODO: Transmit over serial: numon (number of devices still ON) and ID of all devices still on.
+// Transmit over serial: numon (number of devices still ON) and ID of all devices still on / OFF/Presumed off.
 // TODO: Display number of devices still on (either on a LED if numon>0, or on 7segment displays, or on a LCD)
 // TODO: Display device ID's still on.
 // TODO: Maybe even display device names for those ID's, but that would require a lookup table. That would need te be editable or known at compile time. Both difficult.
-uart_puts_P("display refresh called!\n");
-uart_puts_P("NumOn: ");
+
 char buffer[7];
+unsigned int count=0;
+uart_puts_P("NumOn: ");
 itoa(numOn,buffer,10);
 uart_puts(buffer);
 uart_putc('\n');
+uart_puts_P("ID's still ON:");
+    for(unsigned int pntr=0;pntr<numdevs;pntr++){
+        if(devices[pntr].state==ON){
+            itoa(numOn,buffer,16); //hex
+            uart_puts(buffer);
+            uart_puts_P(",");
+            count++;      
+            }
+    }
+    if(count) uart_putc('\n'); else uart_puts_P("NONE \n");
+count = 0;
+uart_puts_P("ID's not seen a while, presumed OFF:");
+    for(unsigned int pntr=0;pntr<numdevs;pntr++){
+        if(devices[pntr].state==PRESUMED_OFF){
+            itoa(numOn,buffer,16); //hex
+            uart_puts(buffer);
+            uart_puts_P(",");      
+            }
+    }
+    if(count) uart_putc('\n'); else uart_puts_P("NONE \n");
+count = 0;
+uart_puts_P("ID's that send goodbye's, known OFF:");
+    for(unsigned int pntr=0;pntr<numdevs;pntr++){
+        if(devices[pntr].state==OFF){
+            itoa(numOn,buffer,16); //hex
+            uart_puts(buffer);
+            uart_puts_P(",");      
+            }
+        }
+    if(count) uart_putc('\n'); else uart_puts_P("NONE \n");
 }
 
 
@@ -81,16 +111,26 @@ static uint16_t prevnow=0;
 
 uart_init( UART_BAUD_SELECT(UART_BAUD_RATE,F_CPU) ); 
 
-sei();             // enable global interrupts (For timers and uart.h)
+sei();             // enable global interrupts (For timers, ext int0, and uart.h)
 
 TCCR0A = 1<<WGM01; // CTC mode
 TCCR0B = 1<<CS01;  // clkIO/8 (16Mhz/8=2MHz)
 OCR0A = 100;       // 16MHz/8/100= 20kHz --- 50 us
-OCR0B = 200;       // 16Mhz/8/200=10kHz --- 100 us
-TIMSK0 = (1<<OCIE0A | 1<<OCIE0B); // enable both OC A and B interrupts.
+TIMSK0 = (1<<OCIE0A); // enable OC1A interrupt
 
-uart_puts_P("Hallo Wereld!\n"); // TODO: and after enabling timers to see if it hangs then?
+//enable INT0 pin change
+EICRA = (1<<ISC00); //any logical change on INT0 generates a interrupt request
+EIMSK = (1<<INT0);  // enable INT0
 
+// TODO: set pin modes for LED/7seg/display/whateveroutputischoosen
+
+uart_puts_P("Hallo Wereld!\n"); 
+
+/* TODO: remove this, it is just a test:
+ char buffer[7];
+ itoa(0xA1,buffer,16); //hex?
+ uart_puts(buffer);
+*/
 
     while(1){
     // proces data received in interrupt once frame is complete.
@@ -101,8 +141,6 @@ uart_puts_P("Hallo Wereld!\n"); // TODO: and after enabling timers to see if it 
     
         if(now-prevnow > 100){ //every second
         prevnow = now;
-        uart_puts_P("tick!\n"); // TODO: test!        
-
         numOn=0; // reset for recount.
             for(unsigned int i=0; i<numdevs; i++){
             // if "now" overflowed (uint16_t MAX 65536, at 100 Hz that's slightly over a 10 minutes. A device should be able to send a message multiple times in 10 minutes.
@@ -113,12 +151,6 @@ uart_puts_P("Hallo Wereld!\n"); // TODO: and after enabling timers to see if it 
 
         DisplayRefresh(); // somehow weergeven welke devices nog aan staan.
         }
-
-    uart_puts_P("Now: ");
-    char buffer[7];
-    itoa(now,buffer,10);
-    uart_puts(buffer);
-    uart_putc('\n');
           
     }
 }
@@ -212,13 +244,11 @@ static uint16_t timestamp;
 
 
 ISR(TIMER0_COMPA_vect){ // 16E6/8/100 = 20 kHz (50 us, for receiver timing.)
-rec_tim++;
-}
-
-ISR(TIMER0_COMPB_vect){ // 16E6/8/200 = 10 kHz (100 us, for timekeeping)
 static volatile uint8_t prescale = 0;
-    if(prescale>=100){
-    now++; // 100 Hz
+
+rec_tim++;
+    if(prescale>=200){
+    now++; // 20 kHz / 200 = 100 Hz
     prescale = 0;
     }
 prescale++;
