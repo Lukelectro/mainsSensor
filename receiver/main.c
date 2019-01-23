@@ -77,18 +77,19 @@ uart_putc('\n');
 
 
 int main(void){
-uint16_t prevnow=0;
+static uint16_t prevnow=0;
 
 uart_init( UART_BAUD_SELECT(UART_BAUD_RATE,F_CPU) ); 
 
 sei();             // enable global interrupts (For timers and uart.h)
-uart_puts_P("Halloooooowtjuhs!!!!!111!\n"); //TODO: this does not get printed. Lets try before enabling timers?
 
 TCCR0A = 1<<WGM01; // CTC mode
 TCCR0B = 1<<CS01;  // clkIO/8 (16Mhz/8=2MHz)
 OCR0A = 100;       // 16MHz/8/100= 20kHz --- 50 us
 OCR0B = 200;       // 16Mhz/8/200=10kHz --- 100 us
 TIMSK0 = (1<<OCIE0A | 1<<OCIE0B); // enable both OC A and B interrupts.
+
+uart_puts_P("Hallo Wereld!\n"); // TODO: and after enabling timers to see if it hangs then?
 
 
     while(1){
@@ -100,7 +101,8 @@ TIMSK0 = (1<<OCIE0A | 1<<OCIE0B); // enable both OC A and B interrupts.
     
         if(now-prevnow > 100){ //every second
         prevnow = now;
-        
+        uart_puts_P("tick!\n"); // TODO: test!        
+
         numOn=0; // reset for recount.
             for(unsigned int i=0; i<numdevs; i++){
             // if "now" overflowed (uint16_t MAX 65536, at 100 Hz that's slightly over a 10 minutes. A device should be able to send a message multiple times in 10 minutes.
@@ -110,7 +112,14 @@ TIMSK0 = (1<<OCIE0A | 1<<OCIE0B); // enable both OC A and B interrupts.
             }
 
         DisplayRefresh(); // somehow weergeven welke devices nog aan staan.
-        }      
+        }
+
+    uart_puts_P("Now: ");
+    char buffer[7];
+    itoa(now,buffer,10);
+    uart_puts(buffer);
+    uart_putc('\n');
+          
     }
 }
 
@@ -214,5 +223,6 @@ static volatile uint8_t prescale = 0;
     }
 prescale++;
 }
+
 
 
