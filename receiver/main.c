@@ -4,6 +4,7 @@
 // TODO: split in a couple usefull .h's and a clearer main
 // TODO: develloped allong multiple lines of thinking, might be incomplete in serveral directions.
 // TODO: build the hw and test&improve
+// TODO: add debug LED / NumON>0 LED. (Is faster then debugwire or serial msg)
 
 #define F_CPU 16000000 // 16 Mhz. 
 //(extern crystal, lfuse 0xF7, hfuse 0xD9 (0x99 to enable debugwire), Efuse 0xFD)
@@ -122,7 +123,10 @@ TIMSK0 = (1<<OCIE0A); // enable OC1A interrupt
 EICRA = (1<<ISC00); //any logical change on INT0 generates a interrupt request
 EIMSK = (1<<INT0);  // enable INT0
 
-// TODO: set pin modes for LED/7seg/display/whateveroutputischoosen
+// set pin modes for LED/7seg/display/whateveroutputischoosen
+DDRC |= 0xFF; // all outputs. For LED's (Except C6 as that is reset)
+DDRD &=~(1<<PORTD2); // PORTD2 INT0 input
+PORTD |= (1<<PORTD2); // INT0 PORTD2 pullup
 
 uart_puts_P("Hallo Wereld!\n"); 
 
@@ -150,6 +154,7 @@ uart_puts_P("Hallo Wereld!\n");
             }
 
         DisplayRefresh(); // somehow weergeven welke devices nog aan staan.
+       // PINC|=(1<<PINC0); // toggle debugLED.
         }
           
     }
@@ -161,7 +166,7 @@ ISR(BADISR_vect)
     // just reset, but have this here so I could in theory add a handler
 }
 
-ISR(INT0_vect){ //TODO: please note INT0 is on PB2. Set it for "trigger on all edges" 
+ISR(INT0_vect){ //INT0 is on PD2. Set for "trigger on all edges" 
 static enum rec_state {NONE,SYNC,IDH, IDL,AANUIT} rec_st = NONE;
 static enum bit_state {WAITINGFORSTART,BIT7_0} bit_st = WAITINGFORSTART;
 static uint8_t recbyte, bit;
@@ -179,8 +184,11 @@ static uint16_t timestamp;
 #define MINBITTIME 6 // 6*50us=300us.
 #define MAXBITTIME 10 // 10*50us=500us.
 
+    
     switch(bit_st){
     case WAITINGFORSTART:
+    PINC|=(1<<PORTC1); // TODO: remove, just for debug
+
         rec_st = NONE;
         if( !(PINB&(1<<PINB2))){ // als PINB2 nu laag is, was het een neergaand edge. (Rare glitches daargelaten, maar die mogen fout gaan)
             timestamp = rec_tim;// To keep track of bittime
@@ -190,13 +198,16 @@ static uint16_t timestamp;
         };
     break;
     case BIT7_0: // MSB first ontvangen
-        
+    PINC|=(1<<PORTC2);    
         
         if( (rec_tim-timestamp) <MINBITTIME){
+            PORTC|=(1<<PORTC4);
              break; // wait a little longer
         }
         if( (rec_tim-timestamp) >MAXBITTIME) {
             bit_st = WAITINGFORSTART;
+            PORTC|=(1<<PORTC5);
+            
             //somehow show timeout-error?
             break;
         }
@@ -212,6 +223,7 @@ static uint16_t timestamp;
         // only write new data if buffer has been read completely. Ensure there are no buffer overwrites during reads...
 
         if((bit==7) && (buffercount == 0)){ // evt kan ik ook als byte==syncword gebruiken als conditie, maar wat dan als dat door toeval is terwijl het synword nog niet af is?
+        PINC|=(1<<PORTC3);
                     // dan zou 'ie dus niet terug moeten naar startbit, maar gewoon moeten doorschuiven tot het wel af is. Terwijl 'ie anders door moet naar ID
             switch(rec_st){
             case SYNC:
