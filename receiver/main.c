@@ -4,7 +4,6 @@
 // TODO: split in a couple usefull .h's and a clearer main
 // TODO: develloped allong multiple lines of thinking, might be incomplete in serveral directions.
 // TODO: build the hw and test&improve
-// TODO: add debug LED / NumON>0 LED. (Is faster then debugwire or serial msg)
 
 #define F_CPU 16000000 // 16 Mhz. 
 //(extern crystal, lfuse 0xF7, hfuse 0xD9 (0x99 to enable debugwire), Efuse 0xFD)
@@ -119,22 +118,13 @@ TCCR0B = 1<<CS01;  // clkIO/8 (16Mhz/8=2MHz)
 OCR0A = 100;       // 16MHz/8/100= 20kHz --- 50 us
 TIMSK0 = (1<<OCIE0A); // enable OC1A interrupt
 
-//enable INT0 pin change
-EICRA = (1<<ISC00); //any logical change on INT0 generates a interrupt request
-EIMSK = (1<<INT0);  // enable INT0
-
 // set pin modes for LED/7seg/display/whateveroutputischoosen
 DDRC |= 0xFF; // all outputs. For LED's (Except C6 as that is reset)
-DDRD &=~(1<<PORTD2); // PORTD2 INT0 input
-PORTD |= (1<<PORTD2); // INT0 PORTD2 pullup
+DDRD &=~(1<<PORTD2); // PORTD2 input
+PORTD |= (1<<PORTD2); // PORTD2 pullup
 
 uart_puts_P("Hallo Wereld!\n"); 
 
-/* TODO: remove this, it is just a test:
- char buffer[7];
- itoa(0xA1,buffer,16); //hex?
- uart_puts(buffer);
-*/
 
     while(1){
     // proces data received in interrupt once frame is complete.
@@ -166,6 +156,7 @@ ISR(BADISR_vect)
     // just reset, but have this here so I could in theory add a handler
 }
 
+/* // OLD. try timer-based polling instead.
 ISR(INT0_vect){ //INT0 is on PD2. Set for "trigger on all edges" 
 static enum rec_state {NONE,SYNC,IDH, IDL,AANUIT} rec_st = NONE;
 static enum bit_state {WAITINGFORSTART,BIT7_0} bit_st = WAITINGFORSTART;
@@ -253,6 +244,8 @@ static uint16_t timestamp;
       break;  
       }
 };
+*/
+
 
 
 ISR(TIMER0_COMPA_vect){ // 16E6/8/100 = 20 kHz (50 us, for receiver timing.)
