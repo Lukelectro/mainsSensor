@@ -138,7 +138,7 @@ uart_puts_P("Hallo Wereld!\n");
             }
         break;
         case IDH: // wait untill IDH is in
-            PORTC|=(1<<0); // Show SYNC XXX only for debug
+            PORTC|=(1<<1); // Show SYNC XXX only for debug
             if(bitcnt==0){
             ID|=rec_buff;
             ID=ID<<8;
@@ -160,7 +160,7 @@ uart_puts_P("Hallo Wereld!\n");
             }
         break;
         case PROCESS: // proces rec'd data
-            PORTC|=(1<<4); // Show data rec'd XXX only for debug
+            PORTC|=(1<<2); // Show data rec'd XXX only for debug
             updateDevice(ID,MSG);
             rec_st=SYNC; // and wait for sync again.
         break;
@@ -186,7 +186,7 @@ uart_puts_P("Hallo Wereld!\n");
             }
 
         DisplayRefresh(); // somehow weergeven welke devices nog aan staan.
-       // PINC|=(1<<PINC0); // toggle debugLED.
+        PINC|=(1<<PINC0); // toggle debugLED.
         }
           
     }
@@ -199,18 +199,23 @@ ISR(BADISR_vect)
 }
 
 ISR(TIMER0_COMPA_vect){ // 16E6/8/100 = 20 kHz (50 us, for receiver timing.)
-static uint8_t prescale = 0, prev = 0, tmp;
+static uint8_t prescale = 0, prev = 0, tmp, timestamp;
     if(prescale>=200){
     now++; // 20 kHz / 200 = 100 Hz
     prescale = 0;
     }
 prescale++;
-tmp=(PIND&1<<PIND2); // because PIND is volatile but I don't want to re-read it (sync it)
-    if(tmp!=prev){ // only respond to edges
+tmp=PIND&(1<<PIND2); // because PIND is volatile but I only want to read it once to prevent race conditions
+
+    if(tmp!=prev){ // only respond to edges 
         prev=tmp;
-        if(!tmp) rec_buff++; // if PIND2 is low now, it was a high-to-low transition, so a 1.
-        rec_buff=rec_buff<<1; // shift in the bits.
-        bitcnt--;              // and count them
+        if(prescale-timestamp>2){  // at least 2*50 = 100 us appart
+            if(!tmp) rec_buff++; // if PIND2 is low now, it was a high-to-low transition, so a 1.
+            rec_buff=rec_buff<<1; // shift in the bits.
+            bitcnt--;              // and count them
+            PINC|=1<<PINC3; //XXX debug
+        }
+        timestamp = prescale;
     } 
 }
 
