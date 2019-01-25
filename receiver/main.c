@@ -33,9 +33,9 @@ uint16_t lastseen; // timestamp for "MISSEDMSG"/"PRESUMED_OFF".
 }device;
 ;
 device devices[numdevs]; // keep status on all possible ID's.
-volatile uint16_t now=0, rec_tim=0, ID;
-volatile uint8_t buffercount=0, MSG;
+uint16_t now=0;
 uint8_t numOn;
+volatile uint8_t rec_buff, bitcnt;
 
 void updateDevice(uint16_t ID, uint8_t MSG){
 // find device in array and update it, and if it's not there, add it.
@@ -107,7 +107,9 @@ uart_puts_P("ID's that send goodbye's, known OFF:");
 
 
 int main(void){
-static uint16_t prevnow=0;
+static uint16_t prevnow=0, ID;
+static uint8_t MSG;
+static enum rec_state {SYNC,IDH,IDL,AANUIT,PROCESS} rec_st = SYNC;
 
 uart_init( UART_BAUD_SELECT(UART_BAUD_RATE,F_CPU) ); 
 
@@ -127,11 +129,51 @@ uart_puts_P("Hallo Wereld!\n");
 
 
     while(1){
-    // proces data received in interrupt once frame is complete.
-        if(buffercount>0){
-        updateDevice(ID,MSG);
-        buffercount--;
-        }    
+   
+    switch(rec_st){
+        case SYNC: // wait for sync byte
+            if(rec_buff==0xA5){
+            bitcnt=7;
+            rec_st=IDH;
+            }
+        break;
+        case IDH: // wait untill IDH is in
+            PORTC|=(1<<0); // Show SYNC XXX only for debug
+            if(bitcnt==0){
+            ID|=rec_buff;
+            ID=ID<<8;
+            bitcnt=7;
+            rec_st=IDL;
+            }
+        break;
+        case IDL: // untill IDL is in
+            if(bitcnt==0){
+            ID|=rec_buff;
+            bitcnt=7;
+            rec_st=AANUIT;
+            }
+        break;
+        case AANUIT: // untill MSG is in
+            if(bitcnt==0){
+            MSG=rec_buff;
+            rec_st = PROCESS;        
+            }
+        break;
+        case PROCESS: // proces rec'd data
+            PORTC|=(1<<4); // Show data rec'd XXX only for debug
+            updateDevice(ID,MSG);
+            rec_st=SYNC; // and wait for sync again.
+        break;
+        default:
+        //err
+        break;
+        }
+
+        if( (rec_st!=SYNC) && (bitcnt>7)){
+        rec_st=SYNC;
+        // this is an error and should not happen
+        PORTC|=(1<<5); // show error
+        }
     
         if(now-prevnow > 100){ //every second
         prevnow = now;
@@ -156,107 +198,20 @@ ISR(BADISR_vect)
     // just reset, but have this here so I could in theory add a handler
 }
 
-/* // OLD. try timer-based polling instead.
-ISR(INT0_vect){ //INT0 is on PD2. Set for "trigger on all edges" 
-static enum rec_state {NONE,SYNC,IDH, IDL,AANUIT} rec_st = NONE;
-static enum bit_state {WAITINGFORSTART,BIT7_0} bit_st = WAITINGFORSTART;
-static uint8_t recbyte, bit;
-static uint16_t timestamp;
-// TODO, receive manchester encoded data (Do clock recovery/syncrhonisation. TBD how best to do this)
-// continuesly shift bits in, so a step later it can be synced.
-
-// A: See an downgoing edge (1-0 transtion), treat it as the start bit (whose value is known to be a 1, first bit from the "sync word" 0xA5). 
-// Start a timer / get a timestamp from a timer
-// B: next edge must be after 300 us, but before 500 us (bit time is 400us). If a edge is too soon, ignore it. If an edge is too late, restart from A.
-// repeat B: untill you have all bits.
-// If the byte is a valid sync, receive ID, then status
-// 
-
-#define MINBITTIME 6 // 6*50us=300us.
-#define MAXBITTIME 10 // 10*50us=500us.
-
-    
-    switch(bit_st){
-    case WAITINGFORSTART:
-    PINC|=(1<<PORTC1); // TODO: remove, just for debug
-
-        rec_st = NONE;
-        if( !(PINB&(1<<PINB2))){ // als PINB2 nu laag is, was het een neergaand edge. (Rare glitches daargelaten, maar die mogen fout gaan)
-            timestamp = rec_tim;// To keep track of bittime
-            bit_st = BIT7_0;
-            rec_st = SYNC;
-            bit = 0;
-        };
-    break;
-    case BIT7_0: // MSB first ontvangen
-    PINC|=(1<<PORTC2);    
-        
-        if( (rec_tim-timestamp) <MINBITTIME){
-            PORTC|=(1<<PORTC4);
-             break; // wait a little longer
-        }
-        if( (rec_tim-timestamp) >MAXBITTIME) {
-            bit_st = WAITINGFORSTART;
-            PORTC|=(1<<PORTC5);
-            
-            //somehow show timeout-error?
-            break;
-        }
-        
-        timestamp = rec_tim; // reset timer, for next iteration            
- 
-        if(!(PINB&(1<<PINB2))){ // als PINB2 nu laag is, was het een neergaand edge. Dus een 1-0 transistie, dus een 1
-          recbyte|=1;      // 1 inschuiven.
-        }
-        recbyte=recbyte<<1; // bitje opschuiven (Dus als het geen 1 was, wordt er een 0 ingeschoven).
-        bit++;
-        
-        // only write new data if buffer has been read completely. Ensure there are no buffer overwrites during reads...
-
-        if((bit==7) && (buffercount == 0)){ // evt kan ik ook als byte==syncword gebruiken als conditie, maar wat dan als dat door toeval is terwijl het synword nog niet af is?
-        PINC|=(1<<PORTC3);
-                    // dan zou 'ie dus niet terug moeten naar startbit, maar gewoon moeten doorschuiven tot het wel af is. Terwijl 'ie anders door moet naar ID
-            switch(rec_st){
-            case SYNC:
-                rec_st = IDH;
-            break;
-            case IDH:
-                ID = recbyte<<8;
-                rec_st = IDL;                                
-            break;
-            case IDL:
-                rec_st = AANUIT;
-                ID|=recbyte;
-            case AANUIT:
-                MSG=recbyte;
-                buffercount++;//trigger verwerking van deze nieuw ontvangen data, in main.
-                rec_st = NONE;
-            break;
-            default:
-                rec_st=NONE;
-                //err!
-            }
-        } // TODO: Is an "else" clause needed to catch buffer overflow or bitcount underflow?
-      break;
-
-      default:
-        // err!
-      break;  
-      }
-};
-*/
-
-
-
 ISR(TIMER0_COMPA_vect){ // 16E6/8/100 = 20 kHz (50 us, for receiver timing.)
-static volatile uint8_t prescale = 0;
-
-rec_tim++;
+static uint8_t prescale = 0, prev = 0, tmp;
     if(prescale>=200){
     now++; // 20 kHz / 200 = 100 Hz
     prescale = 0;
     }
 prescale++;
+tmp=(PIND&1<<PIND2); // because PIND is volatile but I don't want to re-read it (sync it)
+    if(tmp!=prev){ // only respond to edges
+        prev=tmp;
+        if(!tmp) rec_buff++; // if PIND2 is low now, it was a high-to-low transition, so a 1.
+        rec_buff=rec_buff<<1; // shift in the bits.
+        bitcnt--;              // and count them
+    } 
 }
 
 
