@@ -76,15 +76,12 @@ void transmitmanch(uint16_t tx){
   
 uint8_t i=0;
   do{
-    // PORTB=(tx&1)<<PORTB1;   // TODO: This does LSB first. Elsewhere, MSB first. Get some consistency...
      if(tx&0x8000) PORTB=(1<<PORTB1); else PORTB=0; // MSB first, then.
      i++;    
-     //tx=tx>>1;
-    tx=tx<<1;//MSB first	
+     tx=tx<<1;//MSB first	
      _delay_us(180); // at 128Khz clock delay is needed. At 16Khz clock a negative delay would be nice...
     }while(i<16);
 
-PORTB=0; // always end with the pin LOW
 }
 
 void transmitframe(uint8_t HinBye){
@@ -94,6 +91,7 @@ transmitmanch((mA<<8)|m5); // sync word, pre converted to machester 0xA5 = 0b101
 transmitmanch((ID>>16)&0xFFFF); // MSB first
 transmitmanch(ID&0xFFFF);
     if(HinBye) transmitmanch((mF<<8)|mF); else transmitmanch((m0<<8)|m0); // Hi=0xFF, Bye=0x00. 
+PORTB=0; // always end with the pin LOW
 }
 
 
