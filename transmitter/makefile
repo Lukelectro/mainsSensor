@@ -114,7 +114,8 @@ OPTLEVEL=s
 # one of the valid "-c PROGRAMMER-ID" values 
 # described in the avrdude info page.
 # 
-AVRDUDE_PROGRAMMERID=dragon_isp
+AVRDUDE_PROGRAMMERID=dragon_isp -B400
+#bit hackish to pass -B parameter here, but it works...
 
 # port--serial or parallel port to which your 
 # hardware programmer is attached
