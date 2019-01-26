@@ -138,13 +138,14 @@ uart_puts_P("Hallo Wereld!\n");
              rec_st=SYNC;
         break; // or not?
         case SYNC: // wait for sync byte
+           // if ((bitcnt >7)&&(bitcnt<222)) rec_st=waitforstart; // time-out of sorts. TODO: determine correct values, then uncomment.
             if(rec_buff==0xA5){ // should be 0xA5, TODO: change back after this test
             bitcnt=7;
             rec_st=IDH;
             }
         break;
         case IDH: // wait untill IDH is in
-            PORTC|=(1<<1); // Show SYNC XXX only for debug
+            PORTC|=(1<<2); // Show SYNC XXX only for debug
             if(bitcnt==0){
             ID|=rec_buff;
             ID=ID<<8;
@@ -166,7 +167,7 @@ uart_puts_P("Hallo Wereld!\n");
             }
         break;
         case PROCESS: // proces rec'd data
-            PORTC|=(1<<2); // Show data rec'd XXX only for debug
+            PORTC|=(1<<3); // Show data rec'd XXX only for debug
             updateDevice(ID,MSG);
             rec_st=START; // and wait for sync again.
         break;
@@ -205,29 +206,30 @@ ISR(BADISR_vect)
 }
 
 ISR(TIMER0_COMPA_vect){ // 16E6/8/100 = 20 kHz (50 us, for receiver timing.)
-static uint8_t prescale = 0, prev = 0, tmp, timestamp;
+static uint8_t prescale = 0, prev = 0, tmp, timer, timestamp;
     if(prescale>=200){
     now++; // 20 kHz / 200 = 100 Hz
     prescale = 0;
     }
 prescale++;
+timer++; // use seperate variable that does not reset at 200 but overflows like expected.
 tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it once to prevent race conditions
     switch(bit_st){
     case WAITFORSTART:
         if(tmp){
              bit_st = OTHERBITS; // only once input is HIGH, start reading in bits. Because first bit is always 1.
-             timestamp=prescale-8; // start waiting for first edge and make sure that one counts
+             timestamp=timer-6; // start waiting for first edge and make sure that one counts
              prev = tmp; 
             }
     break;
     case OTHERBITS:
         if(tmp!=prev){ // only respond to edges 
             prev=tmp;
-            if((prescale-timestamp)>6){  // at least 7*50 = 350 us appart (half a bittime is about 300 us)
+            if((timer-timestamp)>=8){  // at least 8*50 = 400 us appart (half a bittime is about 300 us)
                 if(!tmp) rec_buff++; // if PIND2 is low now, it was a high-to-low transition, so a 1.
                 rec_buff=rec_buff<<1; // shift in the bits.
                 bitcnt--;              // and count them
-                timestamp = prescale; 
+                timestamp = timer; 
                 PINC|=(1<<1); // for debug: show where edges are detected / sampled
             }
         }
