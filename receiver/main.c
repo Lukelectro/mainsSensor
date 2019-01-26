@@ -36,6 +36,7 @@ device devices[numdevs]; // keep status on all possible ID's.
 uint16_t now=0;
 uint8_t numOn;
 volatile uint8_t rec_buff, bitcnt;
+volatile enum bit_state {WAITFORSTART, OTHERBITS} bit_st=WAITFORSTART;
 
 void updateDevice(uint16_t ID, uint8_t MSG){
 // find device in array and update it, and if it's not there, add it.
@@ -109,11 +110,11 @@ uart_puts_P("ID's that send goodbye's, known OFF:");
 int main(void){
 static uint16_t prevnow=0, ID;
 static uint8_t MSG;
-static enum rec_state {SYNC,IDH,IDL,AANUIT,PROCESS} rec_st = SYNC;
+static enum rec_state {START, SYNC,IDH,IDL,AANUIT,PROCESS} rec_st = START;
 
 uart_init( UART_BAUD_SELECT(UART_BAUD_RATE,F_CPU) ); 
 
-sei();             // enable global interrupts (For timers, ext int0, and uart.h)
+sei();             // enable global interrupts (For timer, and uart.h)
 
 TCCR0A = 1<<WGM01; // CTC mode
 TCCR0B = 1<<CS01;  // clkIO/8 (16Mhz/8=2MHz)
@@ -131,8 +132,13 @@ uart_puts_P("Hallo Wereld!\n");
     while(1){
    
     switch(rec_st){
+        case START:
+             bitcnt=7;
+             bit_st = WAITFORSTART;
+             rec_st=SYNC;
+        break; // or not?
         case SYNC: // wait for sync byte
-            if(rec_buff==0xA5){
+            if(rec_buff==0xA5){ // should be 0xA5, TODO: change back after this test
             bitcnt=7;
             rec_st=IDH;
             }
@@ -162,7 +168,7 @@ uart_puts_P("Hallo Wereld!\n");
         case PROCESS: // proces rec'd data
             PORTC|=(1<<2); // Show data rec'd XXX only for debug
             updateDevice(ID,MSG);
-            rec_st=SYNC; // and wait for sync again.
+            rec_st=START; // and wait for sync again.
         break;
         default:
         //err
@@ -170,7 +176,7 @@ uart_puts_P("Hallo Wereld!\n");
         }
 
         if( (rec_st!=SYNC) && (bitcnt>7)){
-        rec_st=SYNC;
+        rec_st=START;
         // this is an error and should not happen
         PORTC|=(1<<5); // show error
         }
@@ -205,18 +211,30 @@ static uint8_t prescale = 0, prev = 0, tmp, timestamp;
     prescale = 0;
     }
 prescale++;
-tmp=PIND&(1<<PIND2); // because PIND is volatile but I only want to read it once to prevent race conditions
-
-    if(tmp!=prev){ // only respond to edges 
-        prev=tmp;
-        if(prescale-timestamp>2){  // at least 2*50 = 100 us appart
-            if(!tmp) rec_buff++; // if PIND2 is low now, it was a high-to-low transition, so a 1.
-            rec_buff=rec_buff<<1; // shift in the bits.
-            bitcnt--;              // and count them
-            PINC|=1<<PINC3; //XXX debug
+tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it once to prevent race conditions
+    switch(bit_st){
+    case WAITFORSTART:
+        if(tmp){
+             bit_st = OTHERBITS; // only once input is HIGH, start reading in bits. Because first bit is always 1.
+             timestamp=prescale-8; // start waiting for first edge and make sure that one counts
+             prev = tmp; 
+            }
+    break;
+    case OTHERBITS:
+        if(tmp!=prev){ // only respond to edges 
+            prev=tmp;
+            if((prescale-timestamp)>6){  // at least 7*50 = 350 us appart (half a bittime is about 300 us)
+                if(!tmp) rec_buff++; // if PIND2 is low now, it was a high-to-low transition, so a 1.
+                rec_buff=rec_buff<<1; // shift in the bits.
+                bitcnt--;              // and count them
+                timestamp = prescale; 
+                PINC|=(1<<1); // for debug: show where edges are detected / sampled
+            }
         }
-        timestamp = prescale;
-    } 
+    break;
+    default:
+    bit_st=WAITFORSTART; 
+    }
 }
 
 
