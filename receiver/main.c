@@ -4,6 +4,7 @@
 // TODO: split in a couple usefull .h's and a clearer main
 // TODO: develloped allong multiple lines of thinking, might be incomplete in serveral directions.
 // TODO: build the hw and test&improve
+// TODO: fix rec_buff coppy/shift race condition. 
 
 #define F_CPU 16000000 // 16 Mhz. 
 //(extern crystal, lfuse 0xF7, hfuse 0xD9 (0x99 to enable debugwire), Efuse 0xFD)
@@ -41,7 +42,8 @@ volatile enum bit_state {WAITFORSTART, OTHERBITS} bit_st=WAITFORSTART;
 void updateDevice(uint16_t ID, uint8_t MSG){
 // find device in array and update it, and if it's not there, add it.
 unsigned int pntr;
-uint8_t foundit=0; //used as bool   
+uint8_t foundit=0; //used as bool to determine if a device is new or seen before.  
+ 
     for(pntr=0;pntr<numdevs;pntr++){
         if(ID==devices[pntr].ID){
             devices[pntr].lastseen = now;
@@ -50,12 +52,16 @@ uint8_t foundit=0; //used as bool
             break;
 	    }
     }
-    if(foundit==0){
+    if(foundit==0){ // only if it is a new device, not seen before, add it:
         for(pntr=0;pntr<numdevs;pntr++){
             if(devices[pntr].state==NOTINUSE){
                 devices[pntr].lastseen = now;
-                if(MSG==0xFF) devices[pntr].state=ON; else devices[pntr].state=OFF;
-                devices[pntr].ID=ID;            
+                if(MSG==0xFF){ 
+                    devices[pntr].state=ON; 
+                    numOn++;                    
+                    } else devices[pntr].state=OFF; // if the new device is OFF, do not increase or decrease numOn
+                devices[pntr].ID=ID;
+                break; // add new devices just once!
             }        
         }
     }
@@ -77,7 +83,7 @@ uart_putc('\n');
 uart_puts_P("ID's still ON:");
     for(unsigned int pntr=0;pntr<numdevs;pntr++){
         if(devices[pntr].state==ON){
-            itoa(numOn,buffer,16); //hex
+            itoa(devices[pntr].ID,buffer,16); //hex
             uart_puts(buffer);
             uart_puts_P(",");
             count++;      
@@ -88,9 +94,10 @@ count = 0;
 uart_puts_P("ID's not seen a while, presumed OFF:");
     for(unsigned int pntr=0;pntr<numdevs;pntr++){
         if(devices[pntr].state==PRESUMED_OFF){
-            itoa(numOn,buffer,16); //hex
+            itoa(devices[pntr].ID,buffer,16); //hex
             uart_puts(buffer);
-            uart_puts_P(",");      
+            uart_puts_P(","); 
+            count++;        
             }
     }
     if(count) uart_putc('\n'); else uart_puts_P("NONE \n");
@@ -98,9 +105,10 @@ count = 0;
 uart_puts_P("ID's that send goodbye's, known OFF:");
     for(unsigned int pntr=0;pntr<numdevs;pntr++){
         if(devices[pntr].state==OFF){
-            itoa(numOn,buffer,16); //hex
+            itoa(devices[pntr].ID,buffer,16); //hex
             uart_puts(buffer);
             uart_puts_P(",");      
+            count++;                
             }
         }
     if(count) uart_putc('\n'); else uart_puts_P("NONE \n");
