@@ -18,11 +18,12 @@
 #include "./uartlibrary/uart.h"
 #define UART_BAUD_RATE 115200
 
-enum status {NOTINUSE=0, ON, OFF, PRESUMED_OFF}; 
+enum status {NOTINUSE=0, ON, OFF, PRESUMED_OFF, GARBLE}; 
 /* 
 ON: received "ON" message from ID. 
 OFF: Received OFF message from ID. 
 PRESUMED_OFF: Received no message from ID for 2 minutes.
+GARBLE: MSG different from On or OFF.
 NOTINUSE: this device-status storage spot is not in use. This is 0 so this is the default
 */
 
@@ -56,10 +57,18 @@ uint8_t foundit=0; //used as bool to determine if a device is new or seen before
         for(pntr=0;pntr<numdevs;pntr++){
             if(devices[pntr].state==NOTINUSE){
                 devices[pntr].lastseen = now;
-                if(MSG==0xFF){ 
+                switch (MSG){
+                    case 0xFF: 
                     devices[pntr].state=ON; 
-                    numOn++;                    
-                    } else devices[pntr].state=OFF; // if the new device is OFF, do not increase or decrease numOn
+                    numOn++;
+                    break;  
+                    case 0x00:
+                    devices[pntr].state=OFF; // if the new device is OFF, do not increase or decrease numOn (new devices being OFF is... strange)
+                    break;
+                    default:
+                    devices[pntr].state=GARBLE; // if the new device MSG is not ON or OFF (Most likely transmission noise or receiver bug)
+                    break;                    
+                    }
                 devices[pntr].ID=ID;
                 break; // add new devices just once!
             }        
@@ -102,7 +111,7 @@ uart_puts_P("ID's not seen a while, presumed OFF:");
     }
     if(count) uart_putc('\n'); else uart_puts_P("NONE \n");
 count = 0;
-uart_puts_P("ID's that send goodbye's, known OFF:");
+uart_puts_P("ID's that sent goodbye's, known OFF:");
     for(unsigned int pntr=0;pntr<numdevs;pntr++){
         if(devices[pntr].state==OFF){
             itoa(devices[pntr].ID,buffer,16); //hex
@@ -112,6 +121,18 @@ uart_puts_P("ID's that send goodbye's, known OFF:");
             }
         }
     if(count) uart_putc('\n'); else uart_puts_P("NONE \n");
+count = 0;
+uart_puts_P("ID's that sent garbled MSG's:");
+    for(unsigned int pntr=0;pntr<numdevs;pntr++){
+        if(devices[pntr].state==GARBLE){
+            itoa(devices[pntr].ID,buffer,16); //hex
+            uart_puts(buffer);
+            uart_puts_P(",");      
+            count++;                
+            }
+        }
+    if(count) uart_putc('\n'); else uart_puts_P("NONE \n");
+
 }
 
 
