@@ -162,14 +162,14 @@ uart_puts_P("Hallo Wereld!\n");
    
     switch(rec_st){
         case START:
-             bitcnt=7;
+             bitcnt=8;
              bit_st = WAITFORSTART;
              rec_st=SYNC;
         break; // or not?
         case SYNC: // wait for sync byte
            // if ((bitcnt >7)&&(bitcnt<222)) rec_st=waitforstart; // time-out of sorts. TODO: determine correct values, then uncomment.
             if(rec_buff==0xA5){ // should be 0xA5, TODO: change back after this test
-            bitcnt=7;
+            bitcnt=8;
             rec_st=IDH;
             }
         break;
@@ -178,14 +178,14 @@ uart_puts_P("Hallo Wereld!\n");
             if(bitcnt==0){
             ID|=rec_buff;
             ID=ID<<8;
-            bitcnt=7;
+            bitcnt=8;
             rec_st=IDL;
             }
         break;
         case IDL: // untill IDL is in
             if(bitcnt==0){
             ID|=rec_buff;
-            bitcnt=7;
+            bitcnt=8;
             rec_st=AANUIT;
             }
         break;
@@ -273,6 +273,8 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
     default:
     bit_st=WAITFORSTART; 
     }
+    
+
 //PINC=1; //A PORTC0 toggle, was on, so now off. End ISR.
 }
 
