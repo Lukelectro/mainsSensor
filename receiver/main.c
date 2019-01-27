@@ -162,7 +162,6 @@ uart_puts_P("Hallo Wereld!\n");
    
     switch(rec_st){
         case START:
-             bitcnt=8;
              bit_st = WAITFORSTART;
              rec_st=SYNC;
         break; // or not?
@@ -206,7 +205,7 @@ uart_puts_P("Hallo Wereld!\n");
         break;
         }
 
-        if( (rec_st!=SYNC) && (bitcnt>7)){
+        if( (rec_st!=SYNC) && (bitcnt>8)){
         rec_st=START;
         // this is an error and should not happen
         PORTC|=(1<<5); // show error
@@ -261,7 +260,7 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
         if(tmp != prev){ // only respond to edges 
             prev=tmp;
             //PINC=1; //B to show when edges are sampled
-            if((timer-timestamp)>=8){  // at least 8*50 = 400 us appart (half a bittime is about 300 us)
+            if((timer-timestamp)>=9){  // at least 9*50 = 450 us appart (half a bittime is about 300 us)
                 rec_buff=rec_buff<<1; // shift in the (previous) bits before adding a new one (or a new zero)                
                 if(!tmp) rec_buff|=1; // if PIND2 is low now, it was a high-to-low transition, so a 1.
                 bitcnt--;              // and count them
