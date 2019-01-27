@@ -2,7 +2,7 @@
 
 
 // TODO: split in a couple usefull .h's and a clearer main
-// TODO: fix rec_buff coppy/shift race condition. 
+// TODO: fix rec_buff coppy/shift race condition. Though it does not seem to cause problems now, it is possible to write rec_buff at times mainloop does not expect that.
 
 #define F_CPU 16000000 // 16 Mhz. 
 //(extern crystal, lfuse 0xF7, hfuse 0xD9 (0x99 to enable debugwire), Efuse 0xFD)
@@ -218,7 +218,6 @@ uart_puts_P("Hallo Wereld!\n");
             }
 
         DisplayRefresh(); // somehow weergeven welke devices nog aan staan.
-        //PINC=(1<<PINC0); // toggle debugLED.
         }
           
     }
@@ -233,7 +232,6 @@ ISR(BADISR_vect)
 ISR(TIMER0_COMPA_vect){ // 16E6/8/100 = 20 kHz (50 us, for receiver timing.)
 static uint8_t prescale = 0, prev = 0, tmp; 
 static uint16_t timer, timestamp; // it should also work with 8 bit timestamps (timer-timestamp >= n should be overflow safe), but it does not.
-//PORTC|=1;// A PORTC0 on, enter ISR (To measure ISR timing)
 
     if(prescale>=200){
     now++; // 20 kHz / 200 = 100 Hz
@@ -254,29 +252,21 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
                  prev = tmp; 
             }
         }
-    PORTC|=(1<<3); // XXX show for debug state WAITFORSTART
     break;
     case OTHERBITS:
-    PINC|=(1<<3); // XXX show for debug state: OTHERBITS
-    //PORTC|=1; //B to show when in state OTHERBITS
         if(tmp != prev){ // only respond to edges 
             prev=tmp;
-            //PINC=1; //B to show when edges are sampled
             if((timer-timestamp)>=9){  // at least 9*50 = 450 us appart (half a bittime is about 300 us)
                 rec_buff=rec_buff<<1; // shift in the (previous) bits before adding a new one (or a new zero)                
                 if(!tmp) rec_buff|=1; // if PIND2 is low now, it was a high-to-low transition, so a 1.
                 bitcnt--;              // and count them
                 timestamp = timer; 
-                PINC=(1<<1); //D XXX for debug: show where edges are detected as valid
             }
         }
     break;
     default:
     bit_st=WAITFORSTART; 
     }
-    
-
-//PINC=1; //A PORTC0 toggle, was on, so now off. End ISR.
 }
 
 
