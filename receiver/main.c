@@ -2,8 +2,6 @@
 
 
 // TODO: split in a couple usefull .h's and a clearer main
-// TODO: develloped allong multiple lines of thinking, might be incomplete in serveral directions.
-// TODO: build the hw and test&improve
 // TODO: fix rec_buff coppy/shift race condition. 
 
 #define F_CPU 16000000 // 16 Mhz. 
@@ -166,14 +164,12 @@ uart_puts_P("Hallo Wereld!\n");
              rec_st=SYNC;
         break; // or not?
         case SYNC: // wait for sync byte
-           // if ((bitcnt >7)&&(bitcnt<222)) rec_st=waitforstart; // time-out of sorts. TODO: determine correct values, then uncomment.
             if(rec_buff==0xA5){ // should be 0xA5, TODO: change back after this test
             bitcnt=8;
             rec_st=IDH;
             }
         break;
         case IDH: // wait untill IDH is in
-            PORTC|=(1<<2); // Show SYNC XXX only for debug
             if(bitcnt==0){
             ID|=rec_buff;
             ID=ID<<8;
@@ -195,10 +191,10 @@ uart_puts_P("Hallo Wereld!\n");
             }
         break;
         case PROCESS: // proces rec'd data
-            PORTC|=(1<<3); // Show data rec'd XXX only for debug
+            updateDevice(ID,MSG);            
             bit_st = WAITFORSTART; // wait for a start bit again.
             rec_st=START; // and wait for sync again.
-            updateDevice(ID,MSG);
+       
         break;
         default:
         //err
@@ -216,7 +212,7 @@ uart_puts_P("Hallo Wereld!\n");
         numOn=0; // reset for recount.
             for(unsigned int i=0; i<numdevs; i++){
             // if "now" overflowed (uint16_t MAX 65536, at 100 Hz that's slightly over a 10 minutes. A device should be able to send a message multiple times in 10 minutes.
-	            if( (devices[i].lastseen>now) && (devices[i].state!=NOTINUSE)) devices[i].state=PRESUMED_OFF; 
+	            if( (devices[i].lastseen>now) && ((devices[i].state!=NOTINUSE) || (devices[i].state!=OFF)) ) devices[i].state=PRESUMED_OFF;
             //recount number of devices still on.        
                 if( devices[i].state==ON) numOn++;
             }
@@ -248,12 +244,15 @@ timer++; // use seperate variable that does not reset at 200 but overflows like 
 tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it once to prevent race conditions
     switch(bit_st){
     case WAITFORSTART:
-        // TODO: maybe first wait for it to be low? as not to directly detect the last bit as start bit? (Or wait for a low-to-high transition?)
-        if(tmp){
-             bit_st = OTHERBITS; // only once input is HIGH, start reading in bits. Because first bit is always 1.
-             timestamp=timer-50; // start waiting for first edge and make sure that one counts
-             prev = tmp; 
+    //wait for rising edge on input, because first bit is always 1 and in rest signal is low
+        if(tmp!=prev){ // only respond to edges
+            prev=tmp;        
+             if(tmp){ // if input is high now, it was a rising edge and thus a start bit
+                 bit_st = OTHERBITS; // start reading in bits
+                 timestamp=timer-50; // start waiting for first 'real' (valid) edge and make sure that one counts
+                 prev = tmp; 
             }
+        }
     break;
     case OTHERBITS:
     //PORTC|=1; //B to show when in state OTHERBITS
