@@ -171,7 +171,7 @@ uart_puts_P("Hallo Wereld!\n");
         break;
         case IDH: // wait untill IDH is in
             if(bitcnt==0){
-            ID|=rec_buff;
+            ID=rec_buff;
             ID=ID<<8;
             bitcnt=8;
             rec_st=IDL;
