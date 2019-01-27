@@ -245,6 +245,7 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
     switch(bit_st){
     case WAITFORSTART:
     //wait for rising edge on input, because first bit is always 1 and in rest signal is low
+        rec_buff = 0; // otherwise syncbyte might get detected before it's really there
         if(tmp!=prev){ // only respond to edges
             prev=tmp;        
              if(tmp){ // if input is high now, it was a rising edge and thus a start bit
@@ -253,8 +254,10 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
                  prev = tmp; 
             }
         }
+    PORTC|=(1<<3); // XXX show for debug state WAITFORSTART
     break;
     case OTHERBITS:
+    PINC|=(1<<3); // XXX show for debug state: OTHERBITS
     //PORTC|=1; //B to show when in state OTHERBITS
         if(tmp != prev){ // only respond to edges 
             prev=tmp;
