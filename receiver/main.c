@@ -3,6 +3,9 @@
 
 // TODO: split in a couple usefull .h's and a clearer main
 // TODO: fix rec_buff coppy/shift race condition. Though it does not seem to cause problems now, it is possible to write rec_buff at times mainloop does not expect that.
+// TODO: Make time-out for presumed off shorter (but not too short. Maybe 2 minutes instead of 10?)
+// TODO: test with mulitple transmitters / ID's
+// TODO: Might also need tx side modifications: improve immunity to noise. (Als ik er nu een 433Mhz ontvanger op aansluit, ziet het ding ID's die niet gezonden zijn. Meeste als "GARBLED" maar ook als OFF, en als ik lang genoeg wacht waarschijnlijk ook als ON). Misschien dat een timeout op de ontvangst van het syncbyte al aardig helpt? (Mag niet langer duren dan 16 bits na het startbit, normaal gesproken)
 
 #define F_CPU 16000000 // 16 Mhz. 
 //(extern crystal, lfuse 0xF7, hfuse 0xD9 (0x99 to enable debugwire), Efuse 0xFD)
@@ -53,7 +56,7 @@ uint8_t foundit=0; //used as bool to determine if a device is new or seen before
     }
     if(foundit==0){ // only if it is a new device, not seen before, add it:
         for(pntr=0;pntr<numdevs;pntr++){
-            if(devices[pntr].state==NOTINUSE){
+            if(devices[pntr].state==NOTINUSE){ // TODO: If all out of "unused" spots, use "garbled", "off" or "presumed_off" when this msg is not garbled.
                 devices[pntr].lastseen = now;
                 switch (MSG){
                     case 0xFF: 
@@ -162,12 +165,14 @@ uart_puts_P("Hallo Wereld!\n");
         case START:
              bit_st = WAITFORSTART;
              rec_st=SYNC;
+             bitcnt = 17; // 0xBBA5=16 bits, so set a maximum for detecting the sync byte. To prevent false positive detection of syncbyte.
         break; // or not?
         case SYNC: // wait for sync byte
-            if(rec_buff==0xA5){ // should be 0xA5, TODO: change back after this test
+            if (rec_buff==0xA5) { // should be 0xA5
             bitcnt=8;
             rec_st=IDH;
             }
+            if(bitcnt>17) rec_st = START; // Time-out to filter out noise. (Not effective, but no harm either).
         break;
         case IDH: // wait untill IDH is in
             if(bitcnt==0){
@@ -216,7 +221,7 @@ uart_puts_P("Hallo Wereld!\n");
             //recount number of devices still on.        
                 if( devices[i].state==ON) numOn++;
             }
-
+        // TODO: Something that sets devices that are OFF or PRESUMED_OFF to NOTINUSE after a while, otherwise no new devices can be added... (Unless they have a known ID or the receiver is reset... So it might not be that much of a problem, esp. for a POC).
         DisplayRefresh(); // somehow weergeven welke devices nog aan staan.
         }
           
