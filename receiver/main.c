@@ -56,7 +56,7 @@ uint8_t foundit=0; //used as bool to determine if a device is new or seen before
     }
     if(foundit==0){ // only if it is a new device, not seen before, add it:
         for(pntr=0;pntr<numdevs;pntr++){
-            if(devices[pntr].state==NOTINUSE){ // TODO: If all out of "unused" spots, use "garbled", "off" or "presumed_off" when this msg is not garbled.
+            if( (devices[pntr].state==NOTINUSE) || (devices[pntr].state==GARBLE) ){ // TODO: If all out of "unused" or "garbled", re-use "off" or "presumed_off" when this msg is not garbled.
                 devices[pntr].lastseen = now;
                 switch (MSG){
                     case 0xFF: 
