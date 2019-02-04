@@ -6,10 +6,12 @@
 // TODO: Make time-out for presumed off shorter (but not too short. Maybe 2 minutes instead of 10?)
 // TODO: test with mulitple transmitters / ID's
 
-// TODO: Might also need tx side modifications: improve immunity to noise. (Als ik er nu een 433Mhz ontvanger op aansluit, ziet het ding ID's die niet gezonden zijn. Meeste als "GARBLED" maar ook als OFF, en als ik lang genoeg wacht waarschijnlijk ook als ON). Misschien dat een timeout op de ontvangst van het syncbyte al aardig helpt? (Mag niet langer duren dan 16 bits na het startbit, normaal gesproken)
+// TODO: Might also need tx side modifications: improve immunity to noise. (Als ik er nu een 433Mhz ontvanger op aansluit, ziet het ding ID's die niet gezonden zijn. Meeste als "GARBLED" maar ook als OFF, en als ik lang genoeg wacht ook als ON). Misschien dat een timeout op de ontvangst van het syncbyte al aardig helpt? (Mag niet langer duren dan 16 bits na het startbit, normaal gesproken)
 // TODO: Maybe ignore msg's "OFF" if there is no device "ON" with that ID? and other sanity checks 
 // TODO: IDEA:(Only accept an "ON" after 2 msgs? And let transmitter transmit 2 messages in a row on startup? / faster on startup?)
 // TODO: It now misses the "OFF" msg, possibly because the check on startbit is not in the right state to receive it because of previously received noise. So remove that check an figure out something better. Maybe above idea?
+// TODO: Maybe longer HEADER before the ID/MSG? For easy-er sync?
+// TODO: IDEA: ALso check start bit length?
 
 #define F_CPU 16000000 // 16 Mhz. 
 //(extern crystal, lfuse 0xF7, hfuse 0xD9 (0x99 to enable debugwire), Efuse 0xFD)
@@ -267,8 +269,8 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
     case OTHERBITS:
         if(tmp != prev){ // only respond to edges 
             prev=tmp;
-            if(timer-timestamp<=19){      // at most 950us appart
-                if((timer-timestamp)>=9){ // at least 9*50 = 450 us appart (half a bittime is about 300 us)
+            if(timer-timestamp<=19){      // at most 950us appart (Otherwise, restart)
+                if((timer-timestamp)>=9){ // at least 9*50 = 450 us appart (half a bittime is about 300 us) (Otherwise, wait longer and continue)
                     rec_buff=rec_buff<<1; // shift in the (previous) bits before adding a new one (or a new zero)                
                     if(!tmp) rec_buff|=1; // if PIND2 is low now, it was a high-to-low transition, so a 1.
                     bitcnt--;             // and count them
