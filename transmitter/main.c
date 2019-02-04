@@ -56,12 +56,12 @@ const uint8_t mE =0b10101001; //0xA9
 const uint8_t mF =0b10101010; //0xAA
 
 //const uint32_t ID = ((mB<<24)|(mA<<16|(mD<<8)|(m1)); // Unique ID. 0xBAD1 Pre-convert to manchester encoding (because why do that at runtime if it is a constant anyway) 
-const uint32_t ID = 0b10011010100110011010011001010110; // 0xBAD1 , apearently shifting as above is non-const?
+//const uint32_t ID = 0b10011010100110011010011001010110; // 0xBAD1 , apearently shifting as above is non-const?
 
 //pick one or add more (As there is no EEPROM, ID is set at compile time)
 //const uint32_t ID = 0x569A569A; //0x1B1B
 //const uint32_t ID = 0x55555555; //0x0000
-//const uint32_t ID = 0xA599AAA9; //0xCAFE
+const uint32_t ID = 0xA599AAA9; //0xCAFE
 //const uint32_t ID = 0x9A555555; //0xB000
 //const uint32_t ID = 0x9A999AA9; //0xBABE
 //const uint32_t ID = 0x9AA9A966; //0xBEE5 (BEES)
@@ -86,7 +86,12 @@ uint8_t i=0;
 
 void transmitframe(uint8_t HinBye){
 //HinBye is used as bool, 0 means "Bye", all else means "Hi"
+transmitmanch((mF<<8)|mF); // bias transmitter/ receiver. Deliberately not equal to syncword. (Actual data does not matter, so long it is biphase so DC offset is 0);
 transmitmanch((mB<<8)|mB); // bias transmitter/ receiver. Deliberately not equal to syncword. (Actual data does not matter, so long it is biphase so DC offset is 0);
+transmitmanch((mE<<8)|mE); // bias transmitter/ receiver. Deliberately not equal to syncword. (Actual data does not matter, so long it is biphase so DC offset is 0);
+transmitmanch((mF<<8)|m0); // bias transmitter/ receiver. Deliberately not equal to syncword. (Actual data does not matter, so long it is biphase so DC offset is 0);
+transmitmanch((m1<<8)|m3); // bias transmitter/ receiver. Deliberately not equal to syncword. (Actual data does not matter, so long it is biphase so DC offset is 0);
+transmitmanch((m3<<8)|m7); // bias transmitter/ receiver. Deliberately not equal to syncword. (Actual data does not matter, so long it is biphase so DC offset is 0);
 transmitmanch((mA<<8)|m5); // sync word, pre converted to machester 0xA5 = 0b10100101 -manch-> 0b1001 1001 0110 0110 = 0x9966
 transmitmanch((ID>>16)&0xFFFF); // MSB first
 transmitmanch(ID&0xFFFF);
@@ -135,7 +140,8 @@ ISR(BADISR_vect)
 ISR(INT0_vect){ //note INT0 is on PB2 
 
 // if PB2 is low, power failed / is going down
+do{
 transmitframe(0); // transmit goodbye
 // while(1); // Yup. Just wait untill power-on reset
-while( ((PINB&(1<<PINB2))==0)); // nope. Maybe power returns before that time...
+}while( ((PINB&(1<<PINB2))==0)); // nope. Maybe power returns before that time...
 }
