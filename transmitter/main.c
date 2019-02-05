@@ -86,12 +86,13 @@ uint8_t i=0;
 
 void transmitframe(uint8_t HinBye){
 //HinBye is used as bool, 0 means "Bye", all else means "Hi"
-transmitmanch((mF<<8)|mF); // bias transmitter/ receiver. Deliberately not equal to syncword. (Actual data does not matter, so long it is biphase so DC offset is 0);
-transmitmanch((mB<<8)|mB); // bias transmitter/ receiver. Deliberately not equal to syncword. (Actual data does not matter, so long it is biphase so DC offset is 0);
-transmitmanch((mE<<8)|mE); // bias transmitter/ receiver. Deliberately not equal to syncword. (Actual data does not matter, so long it is biphase so DC offset is 0);
-transmitmanch((mF<<8)|m0); // bias transmitter/ receiver. Deliberately not equal to syncword. (Actual data does not matter, so long it is biphase so DC offset is 0);
-transmitmanch((m1<<8)|m3); // bias transmitter/ receiver. Deliberately not equal to syncword. (Actual data does not matter, so long it is biphase so DC offset is 0);
-transmitmanch((m3<<8)|m7); // bias transmitter/ receiver. Deliberately not equal to syncword. (Actual data does not matter, so long it is biphase so DC offset is 0);
+transmitmanch((mF<<8)|mF); // Bias RX/TX / preamble. All "ones" so no matter which "one" it sees as a startbit, things will be fine once synchronized
+transmitmanch((mF<<8)|mF); 
+transmitmanch((mF<<8)|mF);
+transmitmanch((mF<<8)|mF);
+transmitmanch((mF<<8)|mF);
+transmitmanch((mF<<8)|mF);
+transmitmanch((mF<<8)|mF);
 transmitmanch((mA<<8)|m5); // sync word, pre converted to machester 0xA5 = 0b10100101 -manch-> 0b1001 1001 0110 0110 = 0x9966
 transmitmanch((ID>>16)&0xFFFF); // MSB first
 transmitmanch(ID&0xFFFF);
