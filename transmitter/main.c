@@ -104,6 +104,8 @@ int main(void){
 DDRB|=(1<<PORTB1); // PORTB1 output
 PORTB=0; // start with the pin LOW
 
+while((PINB&(1<<PINB2))==0); // wait untill bulk cap is charged
+_delay_ms(5000); // and slightly longer, because input flips before it is full enough.
 
 #ifdef t45
 PRR = 0x0F; // disable powerhungry peripherals
@@ -112,12 +114,12 @@ PRR = 0x0F; // disable powerhungry peripherals
 GIMSK = (1<<6); // enable INT0
 sei(); // enable global interrupts
 #endif
+
 #ifdef t10
 PRR = 0x03;// disable powerhungry peripherals
 CCP = 0xD8; // signature for changing protected registers such as CLKMSR
 CLKMSR = 0x01; // select 128Khz internal oscilator as main clock. Default prescaler is 8, so 16 Khz main clock.
 CLKPSR = 0x00; // set prescaler to 1, so 128 kHz main clock.
-
 //EICRA=0x00; //0x00 is the default and means "low level on PB2 triggers INT0"
 EIMSK = 0x01; // enable INT0
 sei(); // global interrupt enable
@@ -140,8 +142,7 @@ ISR(BADISR_vect)
 ISR(INT0_vect){ //note INT0 is on PB2 
 
 // if PB2 is low, power failed / is going down
-do{
-transmitframe(0); // transmit goodbye
-// while(1); // Yup. Just wait untill power-on reset
-}while( ((PINB&(1<<PINB2))==0)); // nope. Maybe power returns before that time...
+    do{
+        transmitframe(0); // transmit goodbye
+    }while((PINB&(1<<PINB2))==0); // until power goes out or returns.
 }
