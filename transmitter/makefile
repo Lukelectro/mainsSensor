@@ -67,7 +67,8 @@
 # Name of target controller 
 # (e.g. 'at90s8515', see the available avr-gcc mmcu 
 # options for possible values)
-MCU=attiny45
+MCU=attiny10
+#MCU=attiny45
 
 # id to use with programmer
 # default: PROGRAMMER_MCU=$(MCU)
@@ -76,6 +77,7 @@ MCU=attiny45
 # for ATmega8s, avr-gcc expects 'atmega8' and 
 # avrdude requires 'm8')
 PROGRAMMER_MCU=t45
+#Dragon won't do t10 anyway, so not using makefile for that
 
 # Name of our project
 # (use a single word, e.g. 'myproject')

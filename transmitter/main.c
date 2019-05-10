@@ -4,8 +4,8 @@
 // PORTB1 data output
 // PORTB2 = INT0 watch powerloss (same pin on both t45 and t10)
 
-#define t45
-//#define t10
+//#define t45
+#define t10
 
 // TODO: Please note: do not forget to edit the makefile as well when changing MCU between attiny45 and attiny10 (in 2 places), and when using t45, set its fuses correctly.
 
@@ -61,15 +61,14 @@ const uint8_t mF =0b10101010; //0xAA
 //pick one or add more (As there is no EEPROM, ID is set at compile time)
 //const uint32_t ID = 0x569A569A; //0x1B1B
 //const uint32_t ID = 0x55555555; //0x0000
-const uint32_t ID = 0xA599AAA9; //0xCAFE
+//const uint32_t ID = 0xA599AAA9; //0xCAFE
 //const uint32_t ID = 0x9A555555; //0xB000
-//const uint32_t ID = 0x9A999AA9; //0xBABE
+const uint32_t ID = 0x9A999AA9; //0xBABE
 //const uint32_t ID = 0x9AA9A966; //0xBEE5 (BEES)
 //const uint32_t ID = 0x9A55559A; //0xB00B
 //const uint32_t ID = 0x95959595; //0x8888
 //const uint32_t ID = 0x66666666; //0x5555
 //const uint32_t ID = 0x6A6A6A6A; //0x7777
-//const uint32_t ID = 0x69696969; //0x6666
 
 
 void transmitmanch(uint16_t tx){ 
