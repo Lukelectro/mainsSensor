@@ -64,11 +64,13 @@ const uint8_t mF =0b10101010; //0xAA
 //const uint32_t ID = 0xA599AAA9; //0xCAFE
 //const uint32_t ID = 0x9A555555; //0xB000
 //const uint32_t ID = 0x9A999AA9; //0xBABE
+
+/* IN USE: */
 //const uint32_t ID = 0x9AA9A966; //0xBEE5 (BEES)
 //const uint32_t ID = 0x9A55559A; //0xB00B
 //const uint32_t ID = 0x95959595; //0x8888
-const uint32_t ID = 0x66666666; //0x5555
-//const uint32_t ID = 0x6A6A6A6A; //0x7777
+//const uint32_t ID = 0x66666666; //0x5555 
+const uint32_t ID = 0x6A6A6A6A; //0x7777
 
 
 void transmitmanch(uint16_t tx){ 
@@ -132,7 +134,8 @@ sei(); // Enable interupts after PB2 is high
 while(1){
     transmitframe(1); // on powerup and every minute or so, transmit powerup msg
     //_delay_ms(60000);
-    _delay_ms(10000); // so let's test with 10s...
+    _delay_ms(30000); // or half a minute.
+    //_delay_ms(10000); // so let's test with 10s...
     }
 }
 
