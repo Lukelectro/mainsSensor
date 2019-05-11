@@ -63,8 +63,8 @@ const uint8_t mF =0b10101010; //0xAA
 //const uint32_t ID = 0x55555555; //0x0000
 //const uint32_t ID = 0xA599AAA9; //0xCAFE
 //const uint32_t ID = 0x9A555555; //0xB000
-const uint32_t ID = 0x9A999AA9; //0xBABE
-//const uint32_t ID = 0x9AA9A966; //0xBEE5 (BEES)
+//const uint32_t ID = 0x9A999AA9; //0xBABE
+const uint32_t ID = 0x9AA9A966; //0xBEE5 (BEES)
 //const uint32_t ID = 0x9A55559A; //0xB00B
 //const uint32_t ID = 0x95959595; //0x8888
 //const uint32_t ID = 0x66666666; //0x5555
@@ -104,15 +104,11 @@ int main(void){
 DDRB|=(1<<PORTB1); // PORTB1 output
 PORTB=0; // start with the pin LOW
 
-while((PINB&(1<<PINB2))==0); // wait untill bulk cap is charged
-_delay_ms(5000); // and slightly longer, because input flips before it is full enough.
-
 #ifdef t45
 PRR = 0x0F; // disable powerhungry peripherals
 //enable INT0
 //MCUCR=0x00; //0x00 is the default and means "low level on PB2 triggers INT0"
 GIMSK = (1<<6); // enable INT0
-sei(); // enable global interrupts
 #endif
 
 #ifdef t10
@@ -122,8 +118,14 @@ CLKMSR = 0x01; // select 128Khz internal oscilator as main clock. Default presca
 CLKPSR = 0x00; // set prescaler to 1, so 128 kHz main clock.
 //EICRA=0x00; //0x00 is the default and means "low level on PB2 triggers INT0"
 EIMSK = 0x01; // enable INT0
-sei(); // global interrupt enable
 #endif
+
+
+/* do the waiting after the right clock is selected! */
+while((PINB&(1<<PINB2))==0); // wait untill bulk cap is charged
+_delay_ms(5000); // and slightly longer, because input flips before it is full enough.
+
+sei(); // Enable interupts after PB2 is high
 
 
 while(1){
