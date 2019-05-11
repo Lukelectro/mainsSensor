@@ -217,7 +217,7 @@ GENASMFILES=$(filter %.s, $(OBJDEPS:.o=.s))
 
 # Make targets:
 # all, disasm, stats, hex, writeflash/install, clean
-all: $(TRG)
+all: $(TRG) $(HEXTRG)
 
 disasm: $(DUMPTRG) stats
 
