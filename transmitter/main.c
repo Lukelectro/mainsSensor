@@ -115,6 +115,7 @@ GIMSK = (1<<6); // enable INT0
 PRR = 0x03;// disable powerhungry peripherals
 CCP = 0xD8; // signature for changing protected registers such as CLKMSR
 CLKMSR = 0x01; // select 128Khz internal oscilator as main clock. Default prescaler is 8, so 16 Khz main clock.
+CCP = 0xD8; // signature for changing protected registers such as CLKMSR
 CLKPSR = 0x00; // set prescaler to 1, so 128 kHz main clock.
 //EICRA=0x00; //0x00 is the default and means "low level on PB2 triggers INT0"
 EIMSK = 0x01; // enable INT0
