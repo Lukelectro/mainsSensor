@@ -104,6 +104,8 @@ int main(void){
 DDRB|=(1<<PORTB1); // PORTB1 output
 PORTB=0; // start with the pin LOW
 
+transmitframe(1); // XXX for test
+
 #ifdef t45
 PRR = 0x0F; // disable powerhungry peripherals
 //enable INT0
