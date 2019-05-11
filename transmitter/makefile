@@ -220,7 +220,9 @@ GENASMFILES=$(filter %.s, $(OBJDEPS:.o=.s))
 
 # Make targets:
 # all, disasm, stats, hex, writeflash/install, clean
-all: $(TRG)
+all: $(TRG) $(HEXTRG)
+# ALSO make the hexfile otherwise I'm left wondering why it seems to be running the old code...
+
 
 disasm: $(DUMPTRG) stats
 
