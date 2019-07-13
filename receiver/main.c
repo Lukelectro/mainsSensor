@@ -46,7 +46,7 @@ uint16_t now=0;
 uint8_t numOn;
 volatile uint8_t rec_buff, bitcnt;
 volatile enum bit_state {WAITFORSTARTH, WAITFORSTARTL, OTHERBITS} bit_st=WAITFORSTARTH;
-volatile enum rec_state {START,IDH,IDL,AANUIT,PROCESS} rec_st = START;
+volatile enum rec_state {START,WAITFORSYNC,IDH,IDL,AANUIT,PROCESS} rec_st = START;
 
 
 void updateDevice(uint16_t ID, uint8_t MSG){
@@ -172,6 +172,10 @@ uart_puts_P("Hallo Wereld!\n");
         case START:
              bit_st = WAITFORSTARTH;
              bitcnt = 8;
+             rec_st = WAITFORSYNC;
+        break;
+        case WAITFORSYNC:
+            // do not reset bit_st while waiting for start bit!
         break;
         case IDH: // wait untill IDH is in
             PORTC= (1<<4); //  XXX show we are here
@@ -249,32 +253,38 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
 
     if(prev!=tmp){ // detect edges
         prev=tmp;
-        PINC=(1<<0); // toggle PORTC0 to show edge detection (With ch1 of scope on input from rx radio, and ch2 on PORTC0, gives clean representation of signal)    
+        //PINC=(1<<0); // toggle PORTC0 to show edge detection (With ch1 of scope on input from rx radio, and ch2 on PORTC0, gives clean representation of signal)    
         switch (bit_st){
         case WAITFORSTARTH:
             if(tmp){ // upgoing edge
                 timestamp = timer;
             }
             else{ // downgoing edge
-                if( (timer-timestamp >= 12) && (timer-timestamp <= 34) ){ // >= 600 us and <= 1.70 ms
+                if( (timer-timestamp >= 14) && (timer-timestamp <= 24) ){ // >= 700 us and <= 1.2 ms (840 resp 1.4?)
                      timestamp = timer; // save new timestamp
-                     bit_st=WAITFORSTARTL; // high period was within margins
-                 } // else, if not whitin margins, well... retry
+                     bit_st = WAITFORSTARTL; // high period was within margins
+                    // PINC=(1<<0); // to see if the edge on C0 alligns with the falling edge in the "middle" of the sync bit. (it does)
+                } // else, if not whitin margins, well... retry
             }
         break;
         case WAITFORSTARTL:
-            if(!tmp){ // downgoing edge
-            timestamp = timer;
-            }else{ // upgoing edge
-                  if( (timer-timestamp >= 12) && (timer-timestamp <= 34) ){ // >= 600 us and <= 1.70 ms
-                     timestamp = timer; // save new timestamp
-                     bit_st=OTHERBITS; // low period was within margins
-                   } 
-                    else{ // else, if not whitin margins, well... retry
-                     timestamp=timer;
-                     bit_st = WAITFORSTARTH;
-                   } 
+            PINC=(1<<0); // then this should allign with the upgoing edge at the end of the low portion of the sync bit, but it does somehow only occur sometimes... (Ah, bit_st is reset to WAITFORSTARTH in main... That messes this up)    
+            if(tmp){ // upgoing edge
+              if( (timer-timestamp >= 12) && (timer-timestamp <= 38) ){ // >= 600 us and <= 1.90 ms
+                  timestamp = timer; // save new timestamp
+                  bit_st=OTHERBITS; // low period was within margins
+              } 
+              else{ // else, if not whitin margins, well... retry
+                 timestamp=timer;
+                 bit_st = WAITFORSTARTH;
+              }
             }
+            else{ // downgoing edge
+            // Should not happen, but still...
+            bit_st = WAITFORSTARTH;
+          //  PORTC|=1;
+            }
+        
         break;
         case OTHERBITS:
         PORTC|= (1<<2); //  XXX show we are here
