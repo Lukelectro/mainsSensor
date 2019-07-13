@@ -245,8 +245,11 @@ prescale++;
 timer++; // use seperate variable that does not reset at 200 but overflows like expected.
 tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it once to prevent race conditions
 
+//PINC=(1<<0); // toggle PORTC0 to show interrupt timing.
+
     if(prev!=tmp){ // detect edges
         prev=tmp;
+        PINC=(1<<0); // toggle PORTC0 to show edge detection (With ch1 of scope on input from rx radio, and ch2 on PORTC0, gives clean representation of signal)    
         switch (bit_st){
         case WAITFORSTARTH:
             if(tmp){ // upgoing edge
@@ -279,9 +282,11 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
         if(timer-timestamp<=19){      // at most 950us appart (Otherwise, restart)
             if((timer-timestamp)>=9){ // at least 9*50 = 450 us appart (half a bittime is about 300 us) (Otherwise, wait longer and continue)
                 rec_buff=rec_buff<<1; // shift in the (previous) bits before adding a new one (or a new zero)                
-                if(!tmp) rec_buff|=1; // if PIND2 is low now, it was a high-to-low transition, so a 1.
-                    bitcnt--;             // and count them
-                    timestamp = timer; 
+                if(!tmp){
+                    rec_buff|=1; // if PIND2 is low now, it was a high-to-low transition, so a 1.
+                }                
+                bitcnt--;             // and count them
+                timestamp = timer; 
             }
         }else rec_st = START;        // if edges are too far apart, wait for start bit 
         break;
