@@ -11,6 +11,8 @@
 
 #define F_CPU 128000UL // 128 Khz internal osc. (t45 lfuse:E4, rest default. 0x64 for ckdiv8 16 kHz clock, 0x62 default 8/8=1Mhz. t10 clock can be changed at runtime, t45 clock can not be changed at runtime.)
 
+#define HALFBITTIME 180 // us, actual value slightly larger because normal instructions take time too and add to delay.
+
 // NOTE: It will be real slow then, so limit bitclock for programming: avrdude -p t45 -c dragon_isp -t -B 50 (400 at 16Khz)
 // NOTE: Do NOT enable debugwire at this slow clock. It will make reprogramming impossible (debug won't work either so it bricks the chip, btdt)
 
@@ -80,21 +82,28 @@ uint8_t i=0;
      if(tx&0x8000) PORTB=(1<<PORTB1); else PORTB=0; // MSB first, then.
      i++;    
      tx=tx<<1;//MSB first	
-     _delay_us(180); // at 128Khz clock delay is needed. At 16Khz clock a negative delay would be nice...
+     _delay_us(HALFBITTIME); // at 128 KHz clock delay is needed. At 16 KHz clock a negative delay would be nice... So a 128 KHz clock it is.
     }while(i<16);
 
 }
 
 void transmitframe(uint8_t HinBye){
 //HinBye is used as bool, 0 means "Bye", all else means "Hi"
-transmitmanch((mF<<8)|mF); // Bias RX/TX / preamble. All "ones" so no matter which "one" it sees as a startbit, things will be fine once synchronized
+transmitmanch((mF<<8)|mF); // Bias RX/TX / preamble.
 transmitmanch((mF<<8)|mF); 
 transmitmanch((mF<<8)|mF);
 transmitmanch((mF<<8)|mF);
 transmitmanch((mF<<8)|mF);
 transmitmanch((mF<<8)|mF);
 transmitmanch((mF<<8)|mF);
-transmitmanch((mA<<8)|m5); // sync word, pre converted to machester 0xA5 = 0b10100101 -manch-> 0b1001 1001 0110 0110 = 0x9966
+//transmitmanch((mA<<8)|m5); // sync word, pre converted to machester 0xA5 = 0b10100101 -manch-> 0b1001 1001 0110 0110 = 0x9966
+    
+/* sync bit / start bit instead, with easy-to-detect timing (slower) */
+PORTB=(1<<PORTB1);
+delay_us(HALFBITTIME*4);
+PORTB=0;
+delay_us(HALFBITTIME*4);
+  
 transmitmanch((ID>>16)&0xFFFF); // MSB first
 transmitmanch(ID&0xFFFF);
     if(HinBye) transmitmanch((mF<<8)|mF); else transmitmanch((m0<<8)|m0); // Hi=0xFF, Bye=0x00. 
