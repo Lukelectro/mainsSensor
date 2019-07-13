@@ -174,6 +174,7 @@ uart_puts_P("Hallo Wereld!\n");
              bitcnt = 8;
         break;
         case IDH: // wait untill IDH is in
+            PORTC|= (1<<4); //  XXX show we are here
             if(bitcnt==0){
             ID=rec_buff;
             ID=ID<<8;
@@ -259,6 +260,8 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
         }
     break;
     case WAITFORSTARTL:
+    PORTC|= (1<<1); //  XXX show we are here
+            
     // start/syncbit is high for 4*HALFBITTIME, then low for 4*halfbittime.
         if(tmp != prev){ // only respond to edges 
             prev=tmp;
@@ -278,6 +281,8 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
     break;
 
     case OTHERBITS:
+    PORTC|= (1<<2); //  XXX show we are here
+            
         if(tmp != prev){ // only respond to edges 
             prev=tmp;
             if(timer-timestamp<=19){      // at most 950us appart (Otherwise, restart)
