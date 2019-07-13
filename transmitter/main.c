@@ -100,9 +100,9 @@ transmitmanch((mF<<8)|mF);
     
 /* sync bit / start bit instead, with easy-to-detect timing (slower) */
 PORTB=(1<<PORTB1);
-delay_us(HALFBITTIME*4);
+_delay_us(HALFBITTIME*4);
 PORTB=0;
-delay_us(HALFBITTIME*4);
+_delay_us(HALFBITTIME*4);
   
 transmitmanch((ID>>16)&0xFFFF); // MSB first
 transmitmanch(ID&0xFFFF);
