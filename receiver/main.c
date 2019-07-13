@@ -268,9 +268,9 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
             }
         break;
         case WAITFORSTARTL:
-            PINC=(1<<0); // then this should allign with the upgoing edge at the end of the low portion of the sync bit, but it does somehow only occur sometimes... (Ah, bit_st is reset to WAITFORSTARTH in main... That messes this up)    
+            //PINC=(1<<0);  
             if(tmp){ // upgoing edge
-              if( (timer-timestamp >= 12) && (timer-timestamp <= 38) ){ // >= 600 us and <= 1.90 ms
+              if( (timer-timestamp >= 14) && (timer-timestamp <= 38) ){ // >= 700 us and <= 1.90 ms
                   timestamp = timer; // save new timestamp
                   bit_st=OTHERBITS; // low period was within margins
               } 
@@ -287,7 +287,7 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
         
         break;
         case OTHERBITS:
-        PORTC|= (1<<2); //  XXX show we are here
+        PINC= (1<<2); //  XXX show we are here
             
         if(timer-timestamp<=19){      // at most 950us appart (Otherwise, restart)
             if((timer-timestamp)>=9){ // at least 9*50 = 450 us appart (half a bittime is about 300 us) (Otherwise, wait longer and continue)
