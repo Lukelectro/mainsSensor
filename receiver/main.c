@@ -174,7 +174,7 @@ uart_puts_P("Hallo Wereld!\n");
              bitcnt = 8;
         break;
         case IDH: // wait untill IDH is in
-            PORTC|= (1<<4); //  XXX show we are here
+            PORTC= (1<<4); //  XXX show we are here
             if(bitcnt==0){
             ID=rec_buff;
             ID=ID<<8;
@@ -244,61 +244,51 @@ static uint16_t timer, timestamp; // it should also work with 8 bit timestamps (
 prescale++;
 timer++; // use seperate variable that does not reset at 200 but overflows like expected.
 tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it once to prevent race conditions
-    switch(bit_st){
-    case WAITFORSTARTH:
-    // start/syncbit is high for 4*HALFBITTIME, then low for 4*halfbittime.
-        if(tmp != prev){ // only respond to edges 
-            prev=tmp;
-            if(tmp){ // rising edge
-                 timestamp = timer; 
-            }else{  // falling edge
-                if( (timer-timestamp >= 14) && (timer-timestamp <= 30) ){ // > 700 us and < 1.5 ms
+
+    if(prev!=tmp){ // detect edges
+        prev=tmp;
+        switch (bit_st){
+        case WAITFORSTARTH:
+            if(tmp){ // upgoing edge
+                timestamp = timer;
+            }
+            else{ // downgoing edge
+                if( (timer-timestamp >= 12) && (timer-timestamp <= 34) ){ // >= 600 us and <= 1.70 ms
                      timestamp = timer; // save new timestamp
                      bit_st=WAITFORSTARTL; // high period was within margins
-                } 
-            }      
-        }
-    break;
-    case WAITFORSTARTL:
-    PORTC|= (1<<1); //  XXX show we are here
+                 } // else, if not whitin margins, well... retry
+            }
+        break;
+        case WAITFORSTARTL:
+            if(!tmp){ // downgoing edge
+            timestamp = timer;
+            }else{ // upgoing edge
+                  if( (timer-timestamp >= 12) && (timer-timestamp <= 34) ){ // >= 600 us and <= 1.70 ms
+                     timestamp = timer; // save new timestamp
+                     bit_st=OTHERBITS; // low period was within margins
+                   } 
+                    else{ // else, if not whitin margins, well... retry
+                     timestamp=timer;
+                     bit_st = WAITFORSTARTH;
+                   } 
+            }
+        break;
+        case OTHERBITS:
+        PORTC|= (1<<2); //  XXX show we are here
             
-    // start/syncbit is high for 4*HALFBITTIME, then low for 4*halfbittime.
-        if(tmp != prev){ // only respond to edges 
-            prev=tmp;
-            if(tmp){ // rising edge
-                if( (timer-timestamp >= 14) && (timer-timestamp <= 30) ){ // > 700 us and < 1.5 ms
-                    bit_st=OTHERBITS; // low period was within margins 
-                    rec_st = IDH;
-                    timestamp = timer;
-                } else { // low period not withing margins
-                    bit_st = WAITFORSTARTH;
-                }          
-            }else{  // falling edge
-             // should never happen, since waiting for next upgoing edge...
-            bit_st=WAITFORSTARTH;   
-           }      
-        }
-    break;
-
-    case OTHERBITS:
-    PORTC|= (1<<2); //  XXX show we are here
-            
-        if(tmp != prev){ // only respond to edges 
-            prev=tmp;
-            if(timer-timestamp<=19){      // at most 950us appart (Otherwise, restart)
-                if((timer-timestamp)>=9){ // at least 9*50 = 450 us appart (half a bittime is about 300 us) (Otherwise, wait longer and continue)
-                    rec_buff=rec_buff<<1; // shift in the (previous) bits before adding a new one (or a new zero)                
-                    if(!tmp) rec_buff|=1; // if PIND2 is low now, it was a high-to-low transition, so a 1.
+        if(timer-timestamp<=19){      // at most 950us appart (Otherwise, restart)
+            if((timer-timestamp)>=9){ // at least 9*50 = 450 us appart (half a bittime is about 300 us) (Otherwise, wait longer and continue)
+                rec_buff=rec_buff<<1; // shift in the (previous) bits before adding a new one (or a new zero)                
+                if(!tmp) rec_buff|=1; // if PIND2 is low now, it was a high-to-low transition, so a 1.
                     bitcnt--;             // and count them
                     timestamp = timer; 
-                }
-            }else rec_st = START;        // if edges are too far apart, wait for start bit 
+            }
+        }else rec_st = START;        // if edges are too far apart, wait for start bit 
+        break;
+        default:
+        bit_st=WAITFORSTARTH; 
         }
-    break;
-    default:
-    bit_st=WAITFORSTARTH; 
     }
 }
-
 
 
