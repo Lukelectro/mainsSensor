@@ -45,8 +45,8 @@ device devices[numdevs]; // keep status on all possible ID's.
 uint16_t now=0;
 uint8_t numOn;
 volatile uint8_t rec_buff, bitcnt;
-volatile enum bit_state {WAITFORSTART, OTHERBITS} bit_st=WAITFORSTART;
-volatile enum rec_state {START, SYNC,IDH,IDL,AANUIT,PROCESS} rec_st = START;
+volatile enum bit_state {WAITFORSTARTH, WAITFORSTARTL, OTHERBITS} bit_st=WAITFORSTARTH;
+volatile enum rec_state {START,IDH,IDL,AANUIT,PROCESS} rec_st = START;
 
 
 void updateDevice(uint16_t ID, uint8_t MSG){
@@ -170,17 +170,8 @@ uart_puts_P("Hallo Wereld!\n");
    
     switch(rec_st){
         case START:
-             bit_st = WAITFORSTART;
-             rec_st=SYNC;
-             //bitcnt = 17; // XXX 0xBBA5=16 bits, so set a maximum for detecting the sync byte. To prevent false positive detection of syncbyte.
-        break; // or not?
-        case SYNC: // wait for sync byte
-            if (rec_buff==0xA5) { // should be 0xA5
-            bitcnt=8;
-            rec_st=IDH;
-            }
-//            if(bitcnt>17) rec_st = START; // XXX Time-out to filter out noise. (Not effective, might harm reception by missing startbit from valid msgs).
-            // TODO: better way to seperate valid MSG's from noise, because falsely detecting a sync byte isn't to bad as long as MSG is garble, but sometimes it is "OFF" or "ON" and that's a problem.
+             bit_st = WAITFORSTARTH;
+             bitcnt = 8;
         break;
         case IDH: // wait untill IDH is in
             if(bitcnt==0){
@@ -205,7 +196,6 @@ uart_puts_P("Hallo Wereld!\n");
         break;
         case PROCESS: // proces rec'd data
             updateDevice(ID,MSG);            
-            bit_st = WAITFORSTART; // wait for a start bit again.
             rec_st=START; // and wait for sync again.
        
         break;
@@ -214,8 +204,8 @@ uart_puts_P("Hallo Wereld!\n");
         break;
         }
 
-        if( (rec_st>SYNC) && (bitcnt>8)){ // if not in SYNC or START
-        rec_st=START;
+        if( (rec_st>START) && (bitcnt>8)){ // if not in START and bitcount underflowed
+        rec_st=START; // restart
         // this is an error and should not happen
         PORTC|=(1<<5); // show error
         }
@@ -254,18 +244,39 @@ prescale++;
 timer++; // use seperate variable that does not reset at 200 but overflows like expected.
 tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it once to prevent race conditions
     switch(bit_st){
-    case WAITFORSTART:
-    //wait for rising edge on input, because first bit is always 1 and in rest signal is low
-        rec_buff = 0; // otherwise syncbyte might get detected before it's really there
-        if(tmp!=prev){ // only respond to edges
-            prev=tmp;        
-             if(tmp){ // if input is high now, it was a rising edge and thus a start bit
-                 bit_st = OTHERBITS; // start reading in bits
-                 timestamp=timer-10; // start waiting for first 'real' (valid) edge and make sure that one counts
-                 prev = tmp; 
-            }
+    case WAITFORSTARTH:
+    // start/syncbit is high for 4*HALFBITTIME, then low for 4*halfbittime.
+        if(tmp != prev){ // only respond to edges 
+            prev=tmp;
+            if(tmp){ // rising edge
+                 timestamp = timer; 
+            }else{  // falling edge
+                if( (timer-timestamp >= 12) && (timer-timestamp <= 18) ){
+                     timestamp = timer; // save new timestamp
+                     bit_st=WAITFORSTARTL; // high period was within margins
+                } 
+            }      
         }
     break;
+    case WAITFORSTARTL:
+    // start/syncbit is high for 4*HALFBITTIME, then low for 4*halfbittime.
+        if(tmp != prev){ // only respond to edges 
+            prev=tmp;
+            if(tmp){ // rising edge
+                if( (timer-timestamp >= 12) && (timer-timestamp <= 18) ){
+                    bit_st=OTHERBITS; // low period was within margins 
+                    rec_st = IDH;
+                    timestamp = timer;
+                } else { // low period not withing margins
+                    bit_st = WAITFORSTARTH;
+                }          
+            }else{  // falling edge
+             // should never happen, since waiting for next upgoing edge...
+            bit_st=WAITFORSTARTH;   
+           }      
+        }
+    break;
+
     case OTHERBITS:
         if(tmp != prev){ // only respond to edges 
             prev=tmp;
@@ -280,7 +291,7 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
         }
     break;
     default:
-    bit_st=WAITFORSTART; 
+    bit_st=WAITFORSTARTH; 
     }
 }
 
