@@ -251,7 +251,7 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
             if(tmp){ // rising edge
                  timestamp = timer; 
             }else{  // falling edge
-                if( (timer-timestamp >= 12) && (timer-timestamp <= 18) ){
+                if( (timer-timestamp >= 14) && (timer-timestamp <= 30) ){ // > 700 us and < 1.5 ms
                      timestamp = timer; // save new timestamp
                      bit_st=WAITFORSTARTL; // high period was within margins
                 } 
@@ -263,7 +263,7 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
         if(tmp != prev){ // only respond to edges 
             prev=tmp;
             if(tmp){ // rising edge
-                if( (timer-timestamp >= 12) && (timer-timestamp <= 18) ){
+                if( (timer-timestamp >= 14) && (timer-timestamp <= 30) ){ // > 700 us and < 1.5 ms
                     bit_st=OTHERBITS; // low period was within margins 
                     rec_st = IDH;
                     timestamp = timer;
