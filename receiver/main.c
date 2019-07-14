@@ -265,7 +265,7 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
                 timestamp = timer;
             }
             else{ // downgoing edge
-                if( (timer-timestamp >= 12) && (timer-timestamp <= 24) ){ // >= 600 us and <= 1.2 ms (840 resp 1.4?)
+                if( (timer-timestamp >= 15) && (timer-timestamp <= 26) ){ // >= 750 us and <= 1.3 ms
                      timestamp = timer; // save new timestamp
                      bit_st = WAITFORSTARTL; // high period was within margins
                     // PINC=(1<<0); // to see if the edge on C0 alligns with the falling edge in the "middle" of the sync bit. (it does)
@@ -275,7 +275,7 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
         case WAITFORSTARTL:
             //PINC=(1<<0);  
             if(tmp){ // upgoing edge
-              if( (timer-timestamp >= 14) && (timer-timestamp <= 38) ){ // >= 700 us and <= 1.90 ms
+              if( (timer-timestamp >= 15) && (timer-timestamp <= 26) ){ // >= 750 us and <= 1.3 ms
                   timestamp = timer; // save new timestamp
                   bit_st=OTHERBITS; // low period was within margins
               } 
@@ -296,8 +296,8 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
             // first OTHERBITS edge will allways be rising edge because end of syncbit is allways 0. But first OTHERBIT might be either 1 or 0. How to distinguish?
             // Or, for now, a simpler aproach would be to make the first ID bit always a 1. Still leaves 2^15 possible ID's (32768 possibilities )
         //PINC=1; // XXX toggle PINC0 for debug        
-        if((timer-timestamp)<=19){      // at most 19 ticks = 950us appart (Otherwise, restart)
-            if((timer-timestamp)>=8){ // XXX reset to 9, disabled for test XXX at least 9*50 = 450 us appart (half a bittime is about 200 us) (Otherwise, wait longer and continue)
+        if((timer-timestamp)<=75){      // at most 17 ticks = 850us appart (Otherwise, restart) (TODO: WAS 19 ticks, verify working or not)
+            if((timer-timestamp)>=9){ //  at least 7*50 = 350 us appart (half a bittime is about 200+ us) (Otherwise, wait longer and continue) (TODO: was 9 ticks - verify working)
                 rec_buff=rec_buff<<1; // shift in the (previous) bits before adding a new one (or a new zero)                
                 if(!tmp){
                     rec_buff|=1; // if PIND2 is low now, it was a high-to-low transition, so a 1.
