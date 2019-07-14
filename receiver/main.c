@@ -209,12 +209,17 @@ uart_puts_P("Hallo Wereld!\n");
         break;
         }
 
+/*
+
+// do not reset rec_st on "error" while tuning receiver timing.
+
         if( (rec_st>START) && (bitcnt>8)){ // if not in START and bitcount underflowed
         rec_st=START; // restart
         // this is an error and should not happen
         PORTC|=(1<<5); // show error
         }
-    
+
+*/  
         if(now-prevnow > 100){ //every second
         prevnow = now;
         numOn=0; // reset for recount.
@@ -260,7 +265,7 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
                 timestamp = timer;
             }
             else{ // downgoing edge
-                if( (timer-timestamp >= 14) && (timer-timestamp <= 24) ){ // >= 700 us and <= 1.2 ms (840 resp 1.4?)
+                if( (timer-timestamp >= 12) && (timer-timestamp <= 24) ){ // >= 600 us and <= 1.2 ms (840 resp 1.4?)
                      timestamp = timer; // save new timestamp
                      bit_st = WAITFORSTARTL; // high period was within margins
                     // PINC=(1<<0); // to see if the edge on C0 alligns with the falling edge in the "middle" of the sync bit. (it does)
@@ -290,15 +295,18 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
             // TODO: figure out how to make this work with both 0 or 1 as first bit after the allways-low end of the sync bit.
             // first OTHERBITS edge will allways be rising edge because end of syncbit is allways 0. But first OTHERBIT might be either 1 or 0. How to distinguish?
             // Or, for now, a simpler aproach would be to make the first ID bit always a 1. Still leaves 2^15 possible ID's (32768 possibilities )
-        if(timer-timestamp<=19){      // at most 950us appart (Otherwise, restart)
-            if((timer-timestamp)>=9){ // at least 9*50 = 450 us appart (half a bittime is about 300 us) (Otherwise, wait longer and continue)
+        //PINC=1; // XXX toggle PINC0 for debug        
+        if((timer-timestamp)<=19){      // at most 19 ticks = 950us appart (Otherwise, restart)
+            if((timer-timestamp)>=8){ // XXX reset to 9, disabled for test XXX at least 9*50 = 450 us appart (half a bittime is about 200 us) (Otherwise, wait longer and continue)
                 rec_buff=rec_buff<<1; // shift in the (previous) bits before adding a new one (or a new zero)                
                 if(!tmp){
                     rec_buff|=1; // if PIND2 is low now, it was a high-to-low transition, so a 1.
                 }                
                 bitcnt--;             // and count them
-                timestamp = timer; 
+                timestamp = timer;
+                PINC=1; // XXX toggle PINC0 for debug 
             }
+       // PINC=1; // XXX toggle PINC0 for debug
         }else rec_st = START;        // if edges are too far apart, wait for start bit 
         break;
         default:
