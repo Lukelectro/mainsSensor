@@ -76,15 +76,14 @@ const uint8_t mF =0b10101010; //0xAA
 #define mF (0b10101010) //0xAA
 
 
-//const uint32_t ID = ((mB<<23)+(mA<<15)+(mD<<7)+(m1)); // Unique ID. 0xBAD1 Pre-convert to manchester encoding (because why do that at runtime if it is a constant anyway) 
+//const uint32_t ID = ((mB<<24)+(mA<<16)+(mD<<8)+(m1)); // Unique ID. 0xBAD1 Pre-convert to manchester encoding (because why do that at runtime if it is a constant anyway) 
 // The shifting does not work with |, cannot be computed at load time while + does the same and can. Also does not work with const uint8_t's but does with #defines. Oh well.
 // If anyone more versed in the peculairity's of compilers can explainify this please leave a comment.
 
 
 // NOTE: make sure ID starts with a "1", so a 8,9,a,b,c,d,e, or f as first nibble.
- const uint32_t ID = ((mB<<23)+(m0<<15)+(mD<<7)+(mE)); // BODE
-// const uint32_t ID = ((mB<<23)+(m3<<15)+(m3<<7)+(m5)); // B335
-// const uint32_t ID = ((mC<<23)+(mA<<15)+(mF<<7)+(mE)); // CAFE
+
+const uint32_t ID = 0x9A99A656; // BAD1, writen differently because auto-convert seems to still not to function as Intended. (Starts with a lot of 1's in a row somwhow)
 
 void transmitmanch(uint16_t tx){ 
   
