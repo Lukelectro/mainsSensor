@@ -97,7 +97,31 @@ uint8_t i=0;
 
 }
 
-void transmitframe(uint8_t HinBye){
+void transmitHIframe(){
+transmitmanch((mF<<8)|mF); // Bias RX/TX / preamble.
+transmitmanch((mF<<8)|mF); 
+transmitmanch((mF<<8)|mF);
+transmitmanch((mF<<8)|mF);
+transmitmanch((mF<<8)|mF);
+transmitmanch((mF<<8)|mF);
+transmitmanch((mF<<8)|mF);
+//transmitmanch((mA<<8)|m5); // sync word, pre converted to machester 0xA5 = 0b10100101 -manch-> 0b1001 1001 0110 0110 = 0x9966
+    
+/* sync bit / start bit instead, with easy-to-detect timing (slower) */
+PORTB=(1<<PORTB1);
+_delay_us(HALFBITTIME*4);
+PORTB=0;
+_delay_us(HALFBITTIME*4);
+  
+transmitmanch((ID>>16)&0xFFFF); // MSB first
+transmitmanch(ID&0xFFFF);
+//    if(HinBye) transmitmanch((mF<<8)|mF); else transmitmanch((m0<<8)|m0); // Hi=0xFF, Bye=0x00. 
+// nice idea, but too timing sensitive... no decisionmaking while transmitting
+transmitmanch((mF<<8)|mF);
+PORTB=0; // always end with the pin LOW
+}
+
+void transmitBYEframe(){
 //HinBye is used as bool, 0 means "Bye", all else means "Hi"
 transmitmanch((mF<<8)|mF); // Bias RX/TX / preamble.
 transmitmanch((mF<<8)|mF); 
@@ -116,7 +140,7 @@ _delay_us(HALFBITTIME*4);
   
 transmitmanch((ID>>16)&0xFFFF); // MSB first
 transmitmanch(ID&0xFFFF);
-    if(HinBye) transmitmanch((mF<<8)|mF); else transmitmanch((m0<<8)|m0); // Hi=0xFF, Bye=0x00. 
+transmitmanch((m0<<8)|m0); // Bye=0x00. 
 PORTB=0; // always end with the pin LOW
 }
 
@@ -151,7 +175,8 @@ sei(); // Enable interupts after PB2 is high
 
 
 while(1){
-    transmitframe(1); // on powerup and every minute or so, transmit powerup msg
+    //transmitframe(1); // on powerup and every minute or so, transmit powerup msg
+    transmitHIframe();    
     //_delay_ms(60000);
     _delay_ms(30000); // or half a minute.
     //_delay_ms(10000); // so let's test with 10s...
@@ -168,7 +193,7 @@ ISR(INT0_vect){ //note INT0 is on PB2
 
 // if PB2 is low, power failed / is going down
     do{
-        transmitframe(0); // transmit goodbye
+        transmitBYEframe(); // transmit goodbye
         _delay_ms(3); // give reciever a bit of time (to optionally proces an error and wait for syncbit again)
     }while((PINB&(1<<PINB2))==0); // until power goes out or returns.
 }
