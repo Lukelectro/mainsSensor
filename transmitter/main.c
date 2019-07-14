@@ -39,7 +39,7 @@ D      0b10100110
 E      0b10101001
 F      0b10101010
 */
-
+/*
 const uint8_t m0 =0b01010101; //0x55
 const uint8_t m1 =0b01010110; //0x56
 const uint8_t m2 =0b01011001; //0x59
@@ -56,24 +56,35 @@ const uint8_t mC =0b10100101; //0xA5
 const uint8_t mD =0b10100110; //0xA6
 const uint8_t mE =0b10101001; //0xA9
 const uint8_t mF =0b10101010; //0xAA
+*/
 
-//const uint32_t ID = ((mB<<24)|(mA<<16|(mD<<8)|(m1)); // Unique ID. 0xBAD1 Pre-convert to manchester encoding (because why do that at runtime if it is a constant anyway) 
-//const uint32_t ID = 0b10011010100110011010011001010110; // 0xBAD1 , apearently shifting as above is non-const?
+#define m0 (0b01010101) //0x55
+#define m1 (0b01010110) //0x56
+#define m2 (0b01011001) //0x59
+#define m3 (0b01011010) //0x5A
+#define m4 (0b01100101) //0x65
+#define m5 (0b01100110) //0x66
+#define m6 (0b01101001) //0x69
+#define m7 (0b01101010) //0x6A // start seeing a pattern here...
+#define m8 (0b10010101) //0x95
+#define m9 (0b10010110) //0x96
+#define mA (0b10011001) //0x99
+#define mB (0b10011010) //0x9A
+#define mC (0b10100101) //0xA5
+#define mD (0b10100110) //0xA6
+#define mE (0b10101001) //0xA9
+#define mF (0b10101010) //0xAA
 
-//pick one or add more (As there is no EEPROM, ID is set at compile time)
-//const uint32_t ID = 0x569A569A; //0x1B1B
-//const uint32_t ID = 0x55555555; //0x0000
-//const uint32_t ID = 0xA599AAA9; //0xCAFE
-//const uint32_t ID = 0x9A555555; //0xB000
-//const uint32_t ID = 0x9A999AA9; //0xBABE
 
-/* IN USE: */
-//const uint32_t ID = 0x9AA9A966; //0xBEE5 (BEES)
-//const uint32_t ID = 0x9A55559A; //0xB00B
-//const uint32_t ID = 0x95959595; //0x8888
-//const uint32_t ID = 0x66666666; //0x5555 
-const uint32_t ID = 0x6A6A6A6A; //0x7777
+//const uint32_t ID = ((mB<<23)+(mA<<15)+(mD<<7)+(m1)); // Unique ID. 0xBAD1 Pre-convert to manchester encoding (because why do that at runtime if it is a constant anyway) 
+// The shifting does not work with |, cannot be computed at load time while + does the same and can. Also does not work with const uint8_t's but does with #defines. Oh well.
+// If anyone more versed in the peculairity's of compilers can explainify this please leave a comment.
 
+
+// NOTE: make sure ID starts with a "1", so a 8,9,a,b,c,d,e, or f as first nibble.
+ const uint32_t ID = ((mB<<23)+(m0<<15)+(mD<<7)+(mE)); // BODE
+// const uint32_t ID = ((mB<<23)+(m3<<15)+(m3<<7)+(m5)); // B335
+// const uint32_t ID = ((mC<<23)+(mA<<15)+(mF<<7)+(mE)); // CAFE
 
 void transmitmanch(uint16_t tx){ 
   

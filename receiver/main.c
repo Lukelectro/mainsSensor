@@ -289,6 +289,7 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
         case OTHERBITS:
             // TODO: figure out how to make this work with both 0 or 1 as first bit after the allways-low end of the sync bit.
             // first OTHERBITS edge will allways be rising edge because end of syncbit is allways 0. But first OTHERBIT might be either 1 or 0. How to distinguish?
+            // Or, for now, a simpler aproach would be to make the first ID bit always a 1. Still leaves 2^15 possible ID's (32768 possibilities )
         if(timer-timestamp<=19){      // at most 950us appart (Otherwise, restart)
             if((timer-timestamp)>=9){ // at least 9*50 = 450 us appart (half a bittime is about 300 us) (Otherwise, wait longer and continue)
                 rec_buff=rec_buff<<1; // shift in the (previous) bits before adding a new one (or a new zero)                
