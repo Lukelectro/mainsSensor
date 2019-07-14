@@ -76,8 +76,8 @@ MCU=attiny10
 # accept the same MCU name as avr-gcc (for example
 # for ATmega8s, avr-gcc expects 'atmega8' and 
 # avrdude requires 'm8')
-PROGRAMMER_MCU=t45
-#Dragon won't do t10 anyway, so not using makefile for that
+PROGRAMMER_MCU=t10
+
 
 # Name of our project
 # (use a single word, e.g. 'myproject')
@@ -116,8 +116,13 @@ OPTLEVEL=s
 # one of the valid "-c PROGRAMMER-ID" values 
 # described in the avrdude info page.
 # 
-AVRDUDE_PROGRAMMERID=dragon_isp -B400
+
+# for t45: 
+#AVRDUDE_PROGRAMMERID=dragon_isp -B400
 #bit hackish to pass -B parameter here, but it works...
+
+#for t10:
+AVRDUDE_PROGRAMMERID=usbasp
 
 # port--serial or parallel port to which your 
 # hardware programmer is attached
