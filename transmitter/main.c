@@ -169,5 +169,6 @@ ISR(INT0_vect){ //note INT0 is on PB2
 // if PB2 is low, power failed / is going down
     do{
         transmitframe(0); // transmit goodbye
+        _delay_ms(3); // give reciever a bit of time (to optionally proces an error and wait for syncbit again)
     }while((PINB&(1<<PINB2))==0); // until power goes out or returns.
 }
