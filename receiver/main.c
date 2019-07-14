@@ -296,8 +296,8 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
             // first OTHERBITS edge will allways be rising edge because end of syncbit is allways 0. But first OTHERBIT might be either 1 or 0. How to distinguish?
             // Or, for now, a simpler aproach would be to make the first ID bit always a 1. Still leaves 2^15 possible ID's (32768 possibilities )
         //PINC=1; // XXX toggle PINC0 for debug        
-        if((timer-timestamp)<=25){      // at most 17 ticks = 850us appart (Otherwise, restart) (TODO: WAS 19 ticks, verify working or not)
-            if((timer-timestamp)>=9){ //  at least 9*50 = 450 us appart (half a bittime is about 200+ us) (Otherwise, wait longer and continue) (TODO: was 9 ticks - verify working)
+        if((timer-timestamp)<=25){      // at most 17 ticks = 850us appart (Otherwise, restart)
+            if((timer-timestamp)>=10){ //  at least 10*50 = 500 us appart (half a bittime is about 200+ us) (Otherwise, wait longer and continue)
                 rec_buff=rec_buff<<1; // shift in the (previous) bits before adding a new one (or a new zero)                
                 if(!tmp){
                     rec_buff|=1; // if PIND2 is low now, it was a high-to-low transition, so a 1.
