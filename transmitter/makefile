@@ -77,6 +77,7 @@ MCU=attiny10
 # for ATmega8s, avr-gcc expects 'atmega8' and 
 # avrdude requires 'm8')
 PROGRAMMER_MCU=t10
+#PROGRAMMER_MCU=t45
 
 
 # Name of our project
