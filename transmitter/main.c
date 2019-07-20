@@ -83,7 +83,8 @@ const uint8_t mF =0b10101010; //0xAA
 
 // NOTE: make sure ID starts with a "1", so a 8,9,a,b,c,d,e, or f as first nibble.
 
-const uint32_t ID = 0x9A99A656; // BAD1, writen differently because auto-convert seems to still not to function as Intended. (Starts with a lot of 1's in a row somwhow)
+//const uint32_t ID = 0x9A99A656; // BAD1, writen differently because auto-convert seems to still not to function as Intended. (Starts with a lot of 1's in a row somwhow)
+const uint32_t ID = 0x9A5A5A66; // B335
 
 void transmitmanch(uint16_t tx){ 
   

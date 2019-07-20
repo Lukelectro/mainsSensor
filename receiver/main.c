@@ -4,14 +4,11 @@
 // TODO: split in a couple usefull .h's and a clearer main
 // TODO: fix rec_buff coppy/shift race condition. Though it does not seem to cause problems now, it is possible to write rec_buff at times mainloop does not expect that.
 // TODO: Make time-out for presumed off shorter (but not too short. Maybe 2 minutes instead of 10?)
-// TODO: test with mulitple transmitters / ID's
 
 // TODO: Might also need tx side modifications: improve immunity to noise. (Als ik er nu een 433Mhz ontvanger op aansluit, ziet het ding ID's die niet gezonden zijn. Meeste als "GARBLED" maar ook als OFF, en als ik lang genoeg wacht ook als ON). Misschien dat een timeout op de ontvangst van het syncbyte al aardig helpt? (Mag niet langer duren dan 16 bits na het startbit, normaal gesproken)
 // TODO: Maybe ignore msg's "OFF" if there is no device "ON" with that ID? and other sanity checks 
 // TODO: IDEA:(Only accept an "ON" after 2 msgs? And let transmitter transmit 2 messages in a row on startup? / faster on startup?)
-// TODO: It now misses the "OFF" msg, possibly because the check on startbit is not in the right state to receive it because of previously received noise. So remove that check an figure out something better. Maybe above idea?
 // TODO: Maybe longer HEADER before the ID/MSG? For easy-er sync?
-// TODO: IDEA: ALso check start bit length?
 
 #define F_CPU 16000000 // 16 Mhz. 
 //(extern crystal, lfuse 0xF7, hfuse 0xD9 (0x99 to enable debugwire), Efuse 0xFD)
@@ -88,8 +85,8 @@ uint8_t foundit=0; //used as bool to determine if a device is new or seen before
 
 void DisplayRefresh(void){
 // Transmit over serial: numon (number of devices still ON) and ID of all devices still on / OFF/Presumed off.
-// TODO: Display number of devices still on (either on a LED if numon>0, or on 7segment displays, or on a LCD)
-// TODO: Display device ID's still on.
+// Display number of devices still on (either on a LED if numon>0, or on 7segment displays, or on a LCD)
+// Display device ID's still on.
 // TODO: Maybe even display device names for those ID's, but that would require a lookup table. That would need te be editable or known at compile time. Both difficult.
 
 char buffer[7];
