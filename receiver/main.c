@@ -221,8 +221,9 @@ uart_puts_P("Hallo Wereld!\n");
         prevnow = now;
         numOn=0; // reset for recount.
             for(unsigned int i=0; i<numdevs; i++){
-            // if "now" overflowed (uint16_t MAX 65536, at 100 Hz that's slightly over a 10 minutes. A device should be able to send a message multiple times in 10 minutes.
-	            if( (devices[i].lastseen>now) && ((devices[i].state!=NOTINUSE) || (devices[i].state!=OFF)) ) devices[i].state=PRESUMED_OFF;
+            // if a device is not seen for "a long while" (30000 ticks at 100 Hz = 300s = 5 min), set its state to PRESUMED_OFF (probably missed goodbye msg). 
+            //Only if device was ON previously.
+	            if( ((now-devices[i].lastseen) >= 30000) && (devices[i].state==ON) ) devices[i].state=PRESUMED_OFF;
             //recount number of devices still on.        
                 if( devices[i].state==ON) numOn++;
             }
