@@ -206,17 +206,7 @@ uart_puts_P("Hallo Wereld!\n");
         break;
         }
 
-/*
-
-// do not reset rec_st on "error" while tuning receiver timing.
-
-        if( (rec_st>START) && (bitcnt>8)){ // if not in START and bitcount underflowed
-        rec_st=START; // restart
-        // this is an error and should not happen
-        PORTC|=(1<<5); // show error
-        }
-
-*/  
+  
         if(now-prevnow > 100){ //every second
         prevnow = now;
         numOn=0; // reset for recount.
@@ -252,11 +242,8 @@ prescale++;
 timer++; // use seperate variable that does not reset at 200 but overflows like expected.
 tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it once to prevent race conditions
 
-//PINC=(1<<0); // toggle PORTC0 to show interrupt timing.
-
     if(prev!=tmp){ // detect edges
         prev=tmp;
-        //PINC=(1<<0); // toggle PORTC0 to show edge detection (With ch1 of scope on input from rx radio, and ch2 on PORTC0, gives clean representation of signal)    
         switch (bit_st){
         case WAITFORSTARTH:
             if(tmp){ // upgoing edge
@@ -271,7 +258,6 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
             }
         break;
         case WAITFORSTARTL:
-            //PINC=(1<<0);  
             if(tmp){ // upgoing edge
               if( (timer-timestamp >= 15) && (timer-timestamp <= 26) ){ // >= 750 us and <= 1.3 ms
                   timestamp = (timer-9); // save new timestamp minus an offset to make sure next edge gets seen as late enough
@@ -285,7 +271,6 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
             else{ // downgoing edge
             // Should not happen, but still...
             bit_st = WAITFORSTARTH;
-          //  PORTC|=1;
             }
         
         break;
@@ -293,7 +278,6 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
             // TODO: figure out how to make this work with both 0 or 1 as first bit after the allways-low end of the sync bit.
             // first OTHERBITS edge will allways be rising edge because end of syncbit is allways 0. But first OTHERBIT might be either 1 or 0. How to distinguish?
             // Or, for now, a simpler aproach would be to make the first ID bit always a 1. Still leaves 2^15 possible ID's (32768 possibilities )
-        //PINC=1; // XXX toggle PINC0 for debug        
         if((timer-timestamp)<=25){      // at most 17 ticks = 850us appart (Otherwise, restart)
             if((timer-timestamp)>=10){ //  at least 10*50 = 500 us appart (half a bittime is about 200+ us) (Otherwise, wait longer and continue)
                 rec_buff=rec_buff<<1; // shift in the (previous) bits before adding a new one (or a new zero)                
@@ -302,9 +286,7 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
                 }                
                 bitcnt--;             // and count them
                 timestamp = timer;
-                PINC=1; // XXX toggle PINC0 for debug 
-            }
-       // PINC=1; // XXX toggle PINC0 for debug
+             }
         }else{
              rec_st = START;        // if edges are too far apart, wait for start bit 
         }
