@@ -166,8 +166,10 @@ uart_puts_P("ID's that sent goodbye's, known OFF:");
             }
         }
     if(count) uart_putc('\n'); else uart_puts_P("NONE \n");
+
+#ifdef LOG_ALL /* only print if indeed logged */
 count = 0;
-uart_puts_P("ID's that sent garbled MSG's:");
+uart_puts_P("ID's that sent garbled MSG's:"); 
     for(unsigned int pntr=0;pntr<numdevs;pntr++){
         if(devices[pntr].state==GARBLE){
             itoa(devices[pntr].ID,buffer,16); //hex
@@ -177,7 +179,7 @@ uart_puts_P("ID's that sent garbled MSG's:");
             }
         }
     if(count) uart_putc('\n'); else uart_puts_P("NONE \n");
-
+#endif
 }
 
 
