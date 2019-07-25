@@ -2,11 +2,8 @@
 
 
 // TODO: split in a couple usefull .h's and a clearer main
-// TODO: Make time-out for presumed off shorter (but not too short. Maybe 2 minutes instead of 10?)
 
-// TODO: Might also need tx side modifications: improve immunity to noise. (Als ik er nu een 433Mhz ontvanger op aansluit, ziet het ding ID's die niet gezonden zijn. Meeste als "GARBLED" maar ook als OFF, en als ik lang genoeg wacht ook als ON). Misschien dat een timeout op de ontvangst van het syncbyte al aardig helpt? (Mag niet langer duren dan 16 bits na het startbit, normaal gesproken)
 // TODO: IDEA:(Only accept an "ON" after 2 msgs? And let transmitter transmit 2 messages in a row on startup? / faster on startup?)
-// TODO: Maybe longer HEADER before the ID/MSG? For easy-er sync?
 
 #define F_CPU 16000000 // 16 Mhz. 
 //(extern crystal, lfuse 0xF7, hfuse 0xD9 (0x99 to enable debugwire), Efuse 0xFD)
@@ -216,7 +213,6 @@ uart_puts_P("Hallo Wereld!\n");
             // do not reset bit_st while waiting for start bit!
         break;
         case IDH: // wait untill IDH is in
-            PORTC= (1<<4); //  XXX show we are here
             if(bitcnt==0){
             ID=rec_buff;
             ID=ID<<8;
@@ -252,13 +248,12 @@ uart_puts_P("Hallo Wereld!\n");
         prevnow = now;
         numOn=0; // reset for recount.
             for(unsigned int i=0; i<numdevs; i++){
-            // if a device is not seen for "a long while" (30000 ticks at 100 Hz = 300s = 5 min), set its state to PRESUMED_OFF (probably missed goodbye msg). 
+            // if a device is not seen for "a while" (18000 ticks at 100 Hz = 180s = 3 min), set its state to PRESUMED_OFF (probably missed goodbye msg). 
             //Only if device was ON previously.
-	            if( ((now-devices[i].lastseen) >= 30000) && (devices[i].state==ON) ) devices[i].state=PRESUMED_OFF;
+	            if( ((now-devices[i].lastseen) >= 18000) && (devices[i].state==ON) ) devices[i].state=PRESUMED_OFF;
             //recount number of devices still on.        
                 if( devices[i].state==ON) numOn++;
             }
-        // TODO: Something that sets devices that are OFF or PRESUMED_OFF to NOTINUSE after a while, otherwise no new devices can be added... (Unless they have a known ID or the receiver is reset... So it might not be that much of a problem, esp. for a POC).
         DisplayRefresh(); // somehow weergeven welke devices nog aan staan.
         }
           
