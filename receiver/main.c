@@ -2,7 +2,6 @@
 
 
 // TODO: split in a couple usefull .h's and a clearer main
-// TODO: fix rec_buff coppy/shift race condition. Though it does not seem to cause problems now, it is possible to write rec_buff at times mainloop does not expect that.
 // TODO: Make time-out for presumed off shorter (but not too short. Maybe 2 minutes instead of 10?)
 
 // TODO: Might also need tx side modifications: improve immunity to noise. (Als ik er nu een 433Mhz ontvanger op aansluit, ziet het ding ID's die niet gezonden zijn. Meeste als "GARBLED" maar ook als OFF, en als ik lang genoeg wacht ook als ON). Misschien dat een timeout op de ontvangst van het syncbyte al aardig helpt? (Mag niet langer duren dan 16 bits na het startbit, normaal gesproken)
@@ -41,7 +40,8 @@ uint16_t lastseen; // timestamp for "MISSEDMSG"/"PRESUMED_OFF".
 device devices[numdevs]; // keep status on all possible ID's.
 uint16_t now=0;
 uint8_t numOn;
-volatile uint8_t rec_buff, bitcnt;
+volatile uint8_t rec_buff;
+volatile int8_t bitcnt;
 volatile enum bit_state {WAITFORSTARTH, WAITFORSTARTL, OTHERBITS} bit_st=WAITFORSTARTH;
 volatile enum rec_state {START,WAITFORSYNC,IDH,IDL,AANUIT,PROCESS} rec_st = START;
 
@@ -244,55 +244,57 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
 
     if(prev!=tmp){ // detect edges
         prev=tmp;
-        switch (bit_st){
-        case WAITFORSTARTH:
-            if(tmp){ // upgoing edge
-                timestamp = timer;
+        if(bitcnt>0){ // only receive bits if previous data has been read.
+            switch (bit_st){
+            case WAITFORSTARTH:
+                if(tmp){ // upgoing edge
+                    timestamp = timer;
+                }
+                else{ // downgoing edge
+                    if( (timer-timestamp >= 15) && (timer-timestamp <= 26) ){ // >= 750 us and <= 1.3 ms
+                         timestamp = timer; // save new timestamp
+                         bit_st = WAITFORSTARTL; // high period was within margins
+                        // PINC=(1<<0); // to see if the edge on C0 alligns with the falling edge in the "middle" of the sync bit. (it does)
+                    } // else, if not whitin margins, well... retry
+                }
+            break;
+            case WAITFORSTARTL:
+                if(tmp){ // upgoing edge
+                  if( (timer-timestamp >= 15) && (timer-timestamp <= 26) ){ // >= 750 us and <= 1.3 ms
+                      timestamp = (timer-9); // save new timestamp minus an offset to make sure next edge gets seen as late enough
+                      bit_st=OTHERBITS; // low period was within margins
+                  } 
+                  else{ // else, if not whitin margins, well... retry
+                     timestamp=timer;
+                     bit_st = WAITFORSTARTH;
+                  }
+                }
+                else{ // downgoing edge
+                // Should not happen, but still...
+                bit_st = WAITFORSTARTH;
+                }
+            
+            break;
+            case OTHERBITS:
+                // TODO: figure out how to make this work with both 0 or 1 as first bit after the allways-low end of the sync bit.
+                // first OTHERBITS edge will allways be rising edge because end of syncbit is allways 0. But first OTHERBIT might be either 1 or 0. How to distinguish?
+                // Or, for now, a simpler aproach would be to make the first ID bit always a 1. Still leaves 2^15 possible ID's (32768 possibilities )
+            if((timer-timestamp)<=25){      // at most 17 ticks = 850us appart (Otherwise, restart)
+                if((timer-timestamp)>=10){ //  at least 10*50 = 500 us appart (half a bittime is about 200+ us) (Otherwise, wait longer and continue)
+                    rec_buff=rec_buff<<1; // shift in the (previous) bits before adding a new one (or a new zero)                
+                    if(!tmp){
+                        rec_buff|=1; // if PIND2 is low now, it was a high-to-low transition, so a 1.
+                    }                
+                    bitcnt--;             // and count them
+                    timestamp = timer;
+                 }
+            }else{
+                 rec_st = START;        // if edges are too far apart, wait for start bit 
             }
-            else{ // downgoing edge
-                if( (timer-timestamp >= 15) && (timer-timestamp <= 26) ){ // >= 750 us and <= 1.3 ms
-                     timestamp = timer; // save new timestamp
-                     bit_st = WAITFORSTARTL; // high period was within margins
-                    // PINC=(1<<0); // to see if the edge on C0 alligns with the falling edge in the "middle" of the sync bit. (it does)
-                } // else, if not whitin margins, well... retry
+            break;
+            default:
+            bit_st=WAITFORSTARTH; 
             }
-        break;
-        case WAITFORSTARTL:
-            if(tmp){ // upgoing edge
-              if( (timer-timestamp >= 15) && (timer-timestamp <= 26) ){ // >= 750 us and <= 1.3 ms
-                  timestamp = (timer-9); // save new timestamp minus an offset to make sure next edge gets seen as late enough
-                  bit_st=OTHERBITS; // low period was within margins
-              } 
-              else{ // else, if not whitin margins, well... retry
-                 timestamp=timer;
-                 bit_st = WAITFORSTARTH;
-              }
-            }
-            else{ // downgoing edge
-            // Should not happen, but still...
-            bit_st = WAITFORSTARTH;
-            }
-        
-        break;
-        case OTHERBITS:
-            // TODO: figure out how to make this work with both 0 or 1 as first bit after the allways-low end of the sync bit.
-            // first OTHERBITS edge will allways be rising edge because end of syncbit is allways 0. But first OTHERBIT might be either 1 or 0. How to distinguish?
-            // Or, for now, a simpler aproach would be to make the first ID bit always a 1. Still leaves 2^15 possible ID's (32768 possibilities )
-        if((timer-timestamp)<=25){      // at most 17 ticks = 850us appart (Otherwise, restart)
-            if((timer-timestamp)>=10){ //  at least 10*50 = 500 us appart (half a bittime is about 200+ us) (Otherwise, wait longer and continue)
-                rec_buff=rec_buff<<1; // shift in the (previous) bits before adding a new one (or a new zero)                
-                if(!tmp){
-                    rec_buff|=1; // if PIND2 is low now, it was a high-to-low transition, so a 1.
-                }                
-                bitcnt--;             // and count them
-                timestamp = timer;
-             }
-        }else{
-             rec_st = START;        // if edges are too far apart, wait for start bit 
-        }
-        break;
-        default:
-        bit_st=WAITFORSTARTH; 
         }
     }
 }
