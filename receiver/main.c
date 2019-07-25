@@ -5,13 +5,18 @@
 // TODO: Make time-out for presumed off shorter (but not too short. Maybe 2 minutes instead of 10?)
 
 // TODO: Might also need tx side modifications: improve immunity to noise. (Als ik er nu een 433Mhz ontvanger op aansluit, ziet het ding ID's die niet gezonden zijn. Meeste als "GARBLED" maar ook als OFF, en als ik lang genoeg wacht ook als ON). Misschien dat een timeout op de ontvangst van het syncbyte al aardig helpt? (Mag niet langer duren dan 16 bits na het startbit, normaal gesproken)
-// TODO: Maybe ignore msg's "OFF" if there is no device "ON" with that ID? and other sanity checks 
 // TODO: IDEA:(Only accept an "ON" after 2 msgs? And let transmitter transmit 2 messages in a row on startup? / faster on startup?)
 // TODO: Maybe longer HEADER before the ID/MSG? For easy-er sync?
 
 #define F_CPU 16000000 // 16 Mhz. 
 //(extern crystal, lfuse 0xF7, hfuse 0xD9 (0x99 to enable debugwire), Efuse 0xFD)
 #define numdevs 16     // number of devices to keep an eye on
+
+/* If defined, also records new devices if their messages are garbled or OFF, 
+ * otherwise only record new devices that are ON, so OFF messages only get accepted from devices that where ON previously and garbled messages get ignored 
+ */
+//#define LOG_ALL 
+
 
 #include <stdlib.h>
 #include <avr/io.h>
@@ -49,20 +54,26 @@ volatile enum rec_state {START,WAITFORSYNC,IDH,IDL,AANUIT,PROCESS} rec_st = STAR
 void updateDevice(uint16_t ID, uint8_t MSG){
 // find device in array and update it, and if it's not there, add it.
 unsigned int pntr;
-uint8_t foundit=0; //used as bool to determine if a device is new or seen before.  
- 
+uint8_t processed=0; // is this device allready updated?  
+
+/* first check if this device ID is seen before allready. if it is, update its status (and set processed to 1)*/ 
     for(pntr=0;pntr<numdevs;pntr++){
         if(ID==devices[pntr].ID){
             devices[pntr].lastseen = now;
             if(MSG==0xFF) devices[pntr].state=ON; else devices[pntr].state=OFF;
-            foundit=1;
+            processed=1;
             break;
 	    }
     }
-    if(foundit==0){ // only if it is a new device, not seen before, add it:
+
+/* if it is a device not seen before (processed == 0), then add it */
+    
+    while(0==processed){ 
+    enum status trytofill = NOTINUSE; /* first try to use a unused spot, if that fails, try to use "garble", "off" or "presumed_off", in that order */
         for(pntr=0;pntr<numdevs;pntr++){
-            if( (devices[pntr].state==NOTINUSE) || (devices[pntr].state==GARBLE) ){ // TODO: If all out of "unused" or "garbled", re-use "off" or "presumed_off" when this msg is not garbled.
+            if( devices[pntr].state==trytofill ){ // If all out of "unused", re-use "garble", "off" or "presumed_off".
                 devices[pntr].lastseen = now;
+                #ifdef LOG_ALL
                 switch (MSG){
                     case 0xFF: 
                     devices[pntr].state=ON; 
@@ -75,11 +86,39 @@ uint8_t foundit=0; //used as bool to determine if a device is new or seen before
                     devices[pntr].state=GARBLE; // if the new device MSG is not ON or OFF (Most likely transmission noise or receiver bug)
                     break;                    
                     }
-                devices[pntr].ID=ID;
+                 devices[pntr].ID=ID;               
+                 #else
+                 if (0xFF==MSG){ // only if the new device is ON, add it:
+                    devices[pntr].state=ON; 
+                    numOn++;
+                    devices[pntr].ID=ID;               
+                 }   
+                #endif
+                processed = 1;
                 break; // add new devices just once!
             }        
         }
+        switch(trytofill){
+        case NOTINUSE:
+        trytofill = GARBLE;
+        break;
+        case GARBLE:
+        trytofill = OFF;
+        break;
+        case OFF:
+        trytofill = PRESUMED_OFF;
+        break;
+        default:
+        // ran out of spots
+        uart_putc('\n');
+        uart_puts_P("Cannot store new device, ran out of storage space");        
+        uart_putc('\n');
+        processed = 1; // otherwise it would hang here.
+        break;        
+        }
     }
+
+
 }
 
 
