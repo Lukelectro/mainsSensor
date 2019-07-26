@@ -63,9 +63,9 @@ uint8_t processed=0; // is this device allready updated?
     }
 
 /* if it is a device not seen before (processed == 0), then add it */
+    enum status trytofill = NOTINUSE; /* first try to use a unused spot, if that fails, try to use "garble", "off" or "presumed_off", in that order */
     
     while(0==processed){ 
-    enum status trytofill = NOTINUSE; /* first try to use a unused spot, if that fails, try to use "garble", "off" or "presumed_off", in that order */
         for(pntr=0;pntr<numdevs;pntr++){
             if( devices[pntr].state==trytofill ){ // If all out of "unused", re-use "garble", "off" or "presumed_off".
                 devices[pntr].lastseen = now;
