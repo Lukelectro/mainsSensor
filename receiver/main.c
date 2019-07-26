@@ -10,7 +10,7 @@
 /* If defined, also records new devices if their messages are garbled or OFF, 
  * otherwise only record new devices that are ON, so OFF messages only get accepted from devices that where ON previously and garbled messages get ignored 
  */
-#define LOG_ALL 
+//#define LOG_ALL 
 
 
 #include <stdlib.h>
