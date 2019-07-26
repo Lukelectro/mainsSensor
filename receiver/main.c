@@ -1,13 +1,11 @@
 // MainsSensor receiver side POC. Runs on Atmega328, serial (or USB-serial) communication to something smarter, or maybe later port to ESP for MQTT conectivity.
 
-
 // TODO: split in a couple usefull .h's and a clearer main
 
-// TODO: IDEA:(Only accept an "ON" after 2 msgs? And let transmitter transmit 2 messages in a row on startup? / faster on startup?)
 
 #define F_CPU 16000000 // 16 Mhz. 
 //(extern crystal, lfuse 0xF7, hfuse 0xD9 (0x99 to enable debugwire), Efuse 0xFD)
-#define numdevs 16     // number of devices to keep an eye on
+#define numdevs 32     // number of devices to keep an eye on
 
 /* If defined, also records new devices if their messages are garbled or OFF, 
  * otherwise only record new devices that are ON, so OFF messages only get accepted from devices that where ON previously and garbled messages get ignored 
@@ -23,9 +21,10 @@
 #include "./uartlibrary/uart.h"
 #define UART_BAUD_RATE 115200
 
-enum status {NOTINUSE=0, ON, OFF, PRESUMED_OFF, GARBLE}; 
+enum status {NOTINUSE=0, ON, ON_1st, OFF, PRESUMED_OFF, GARBLE}; 
 /* 
-ON: received "ON" message from ID. 
+ON_1st: received first "ON" message from ID.
+ON: received 2nd "ON" message from ID, within (PRESUMED_OFF waiting period) 2 minutes. (To filter noise seen as ID's) 
 OFF: Received OFF message from ID. 
 PRESUMED_OFF: Received no message from ID for 2 minutes.
 GARBLE: MSG different from On or OFF.
@@ -73,7 +72,7 @@ uint8_t processed=0; // is this device allready updated?
                 #ifdef LOG_ALL
                 switch (MSG){
                     case 0xFF: 
-                    devices[pntr].state=ON; 
+                    devices[pntr].state=ON_1st; // only show as "ON" if it is seen at least twice
                     numOn++;
                     break;  
                     case 0x00:
@@ -86,7 +85,7 @@ uint8_t processed=0; // is this device allready updated?
                  devices[pntr].ID=ID;               
                  #else
                  if (0xFF==MSG){ // only if the new device is ON, add it:
-                    devices[pntr].state=ON; 
+                    devices[pntr].state=ON_1st; // only show as "ON" if it is seen at least twice (If it is not allready in the list)
                     numOn++;
                     devices[pntr].ID=ID;               
                  }   
@@ -250,7 +249,7 @@ uart_puts_P("Hallo Wereld!\n");
             for(unsigned int i=0; i<numdevs; i++){
             // if a device is not seen for "a while" (18000 ticks at 100 Hz = 180s = 3 min), set its state to PRESUMED_OFF (probably missed goodbye msg). 
             //Only if device was ON previously.
-	            if( ((now-devices[i].lastseen) >= 18000) && (devices[i].state==ON) ) devices[i].state=PRESUMED_OFF;
+	            if( ((now-devices[i].lastseen) >= 18000) && ( (devices[i].state==ON) || (devices[i].state==ON_1st) )) devices[i].state=PRESUMED_OFF;
             //recount number of devices still on.        
                 if( devices[i].state==ON) numOn++;
             }

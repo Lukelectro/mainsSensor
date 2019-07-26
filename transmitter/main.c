@@ -84,8 +84,8 @@ const uint8_t mF =0b10101010; //0xAA
 // NOTE: make sure ID starts with a "1", so a 8,9,a,b,c,d,e, or f as first nibble.
 
 //const uint32_t ID = 0x9A99A656; // BAD1, writen differently because auto-convert seems to still not to function as Intended. (Starts with a lot of 1's in a row somwhow)
-//const uint32_t ID = 0x9A5A5A66; // B335
-const uint32_t ID = 0xA599AAA9; // CAFE
+const uint32_t ID = 0x9A5A5A66; // B335
+//const uint32_t ID = 0xA599AAA9; // CAFE
 
 void transmitmanch(uint16_t tx){ 
   
@@ -175,9 +175,11 @@ _delay_ms(5000); // and slightly longer, because input flips before it is full e
 
 sei(); // Enable interupts after PB2 is high
 
+transmitHIframe(); // transmit powerup message
+_delay_ms(5000);   // next one in 5 s.
 
 while(1){
-    //transmitframe(1); // on powerup and every minute or so, transmit powerup msg
+    //transmitframe(1); // retransmit powerup msg every minute or so
     transmitHIframe();    
     //_delay_ms(60000);
     _delay_ms(30000); // or half a minute.
