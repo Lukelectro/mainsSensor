@@ -56,7 +56,7 @@ uint8_t processed=0; // is this device allready updated?
     for(pntr=0;pntr<numdevs;pntr++){
         if(ID==devices[pntr].ID){
             devices[pntr].lastseen = now;
-            if(MSG==0xFF) devices[pntr].state=ON; else devices[pntr].state=OFF;
+            if(MSG==0xFF) devices[pntr].state=ON; else if(MSG=0x00) devices[pntr].state=OFF;
             processed=1;
             break;
 	    }
