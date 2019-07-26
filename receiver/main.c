@@ -10,7 +10,7 @@
 /* If defined, also records new devices if their messages are garbled or OFF, 
  * otherwise only record new devices that are ON, so OFF messages only get accepted from devices that where ON previously and garbled messages get ignored 
  */
-//#define LOG_ALL 
+#define LOG_ALL 
 
 
 #include <stdlib.h>
@@ -168,6 +168,18 @@ count = 0;
 uart_puts_P("ID's that sent garbled MSG's:"); 
     for(unsigned int pntr=0;pntr<numdevs;pntr++){
         if(devices[pntr].state==GARBLE){
+            itoa(devices[pntr].ID,buffer,16); //hex
+            uart_puts(buffer);
+            uart_puts_P(",");      
+            count++;                
+            }
+        }
+    if(count) uart_putc('\n'); else uart_puts_P("NONE \n");
+/* when logging all/showing all, also show ON_1st*/
+count = 0;
+uart_puts_P("ID's that so far only sent 1 ON msg (ON_1st):"); 
+    for(unsigned int pntr=0;pntr<numdevs;pntr++){
+        if(devices[pntr].state==ON_1st){
             itoa(devices[pntr].ID,buffer,16); //hex
             uart_puts(buffer);
             uart_puts_P(",");      
