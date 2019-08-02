@@ -1,7 +1,7 @@
 // MainsSensor receiver side POC. Runs on Atmega328, serial (or USB-serial) communication to something smarter, or maybe later port to ESP for MQTT conectivity.
 
 // TODO: split in a couple usefull .h's and a clearer main
-
+// TODO: ID->name mapping and a way to set these names over serial and a display to show the names on for devices still ON and an LED that's lit when there is still a nonzero amount of devices still ON.
 
 #define F_CPU 16000000 // 16 Mhz. 
 //(extern crystal, lfuse 0xF7, hfuse 0xD9 (0x99 to enable debugwire), Efuse 0xFD)
@@ -17,7 +17,8 @@
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
-#include <avr/pgmspace.h>
+#include <string.h>
+#include <avr/eeprom.h>
 #include "./uartlibrary/uart.h"
 #define UART_BAUD_RATE 115200
 
@@ -37,14 +38,73 @@ enum status state;
 uint16_t lastseen; // timestamp for "MISSEDMSG"/"PRESUMED_OFF".
 //str name[]? Of gewoon een bende led's op een frontpaneel en daar plakkertjes naast?
 }device;
-;
+
+typedef struct{
+uint16_t ID;
+char name[16]; // name, max 16 characters 
+}DNS; // Device Name Something
+
+
 device devices[numdevs]; // keep status on all possible ID's.
+DNS devnames[numdevs];   // keep all the name / ID couplings here.
+
 uint16_t now=0;
 uint8_t numOn;
 volatile uint8_t rec_buff;
 volatile int8_t bitcnt;
 volatile enum bit_state {WAITFORSTARTH, WAITFORSTARTL, OTHERBITS} bit_st=WAITFORSTARTH;
 volatile enum rec_state {START,WAITFORSYNC,IDH,IDL,AANUIT,PROCESS} rec_st = START;
+
+void readdevnames(){ // read devnames from EEPROM (on bootup)
+    uint8_t size = sizeof(devnames[0]); // they are all the same size (18 bytes, but still use sizeoff in case it changes)    
+    for(unsigned int i = 0; i<numdevs; i++){
+    eeprom_read_block(&devnames[i],(void*)(i*size),size);
+    }
+}
+
+void storedevnames(){ // store devnames in EEPROM (on modification) 
+// use EEPROM update, so when data is the same, nothing gets rewritten (saves wear);
+    uint8_t size = sizeof(devnames[0]); // they are all the same size (18 bytes, but still use sizeoff in case it changes)    
+    for(unsigned int i = 0; i<numdevs ; i++){
+        eeprom_update_block(&devnames[i],(void*)(i*size),size);
+    }
+}
+
+// TODO: serial input of new device names for each ID? setname 0x8234 slartibartfast 
+void readnewname(DNS* names){
+    unsigned int data_in;
+    static char input[32]; // setname 0x1234 a16charalongname+0    
+    static uint8_t i = 0;
+    unsigned long IDL = 0; // long ID, for strtoul 
+    uint16_t newID;
+    char newname[16];   
+
+    /* per time this function gets called, one character gets read form buffer, so call periodically */
+
+    data_in = uart_getc(); // read a character
+    if( 0==(data_in & 0xFF00)){ // higher byte is status, 0 is good
+        input[i] = data_in & 0x00FF; // lower byte is data
+        uart_putc(input[i]); // echo what's input        
+        if(i<32) i++;
+    }     
+    
+    if(i==32){
+        i=0;
+        if(0==strncmp(input,"setname",7)){ // if correctly formed command (use strncmp or strstr?)
+        IDL = strtoul((void*)(input+7),NULL,0); // begin 7 leters into input string, so skip the "setname" and start at the ID ( hex as 0x... or decimal)        
+        }
+        else
+        {
+         uart_puts_P("Incorrect command. Try setname [ID] [name (max 16)]\n");
+        }
+        if(IDL!=0){ // if indeed an ID is input
+            newID = IDL; // copy ID, for later search
+            //TODO: finish implementation            
+            //newname = // copy name
+            // for i in names find the unused/255 one and put this ID/name combo in, then update EEPROM
+        }
+    }
+}
 
 
 void updateDevice(uint16_t ID, uint8_t MSG){
@@ -194,6 +254,8 @@ uart_puts_P("ID's that so far only sent 1 ON msg (ON_1st):");
 int main(void){
 static uint16_t prevnow=0, ID;
 static uint8_t MSG;
+
+readdevnames(); // read device names into RAM from EEPROM on bootup
 
 uart_init( UART_BAUD_SELECT(UART_BAUD_RATE,F_CPU) ); 
 
