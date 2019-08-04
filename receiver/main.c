@@ -71,37 +71,69 @@ void storedevnames(){ // store devnames in EEPROM (on modification)
 }
 
 // TODO: serial input of new device names for each ID? setname 0x8234 slartibartfast 
+// TODO: add a way to erase ID/name combo's with unused or no longer used ID's (or wrongly entered)
+// maybe just set unused names to " ", and make it re-use those spots for new ID/name combinations?
 void readnewname(DNS* names){
     unsigned int data_in;
     static char input[32]; // setname 0x1234 a16charalongname+0    
     static uint8_t i = 0;
     unsigned long IDL = 0; // long ID, for strtoul 
     uint16_t newID;
-    char newname[16];   
+    char newname[16], buff, buffer[7];   
+    char* startofname;
 
     /* per time this function gets called, one character gets read form buffer, so call periodically */
 
     data_in = uart_getc(); // read a character
     if( 0==(data_in & 0xFF00)){ // higher byte is status, 0 is good
-        input[i] = data_in & 0x00FF; // lower byte is data
-        uart_putc(input[i]); // echo what's input        
-        if(i<32) i++;
+        buff = data_in & 0x00FF; // lower byte is data
+        input[i] = buff;        
+        uart_putc(buff); // echo what's input        
+        if(i<31) i++;
     }     
     
-    if(i==32){
+    if((i==31) || (13==buff) || (10==buff) ){ // On CR, LF or 32 characters input (use buff because i++)
+        input[i]=NULL; // correctly terminate string for further processing        
         i=0;
+        buff = 0; // so it does not keep looping this
         if(0==strncmp(input,"setname",7)){ // if correctly formed command (use strncmp or strstr?)
         IDL = strtoul((void*)(input+7),NULL,0); // begin 7 leters into input string, so skip the "setname" and start at the ID ( hex as 0x... or decimal)        
         }
         else
         {
-         uart_puts_P("Incorrect command. Try setname [ID] [name (max 16)]\n");
+         uart_puts_P("\nIncorrect command. Try setname [ID] [name (max 16)]\n");
         }
         if(IDL!=0){ // if indeed an ID is input
             newID = IDL; // copy ID, for later search
-            //TODO: finish implementation            
-            //newname = // copy name
-            // for i in names find the unused/255 one and put this ID/name combo in, then update EEPROM
+            
+            // display ID and name just set.
+            
+            itoa(IDL,buffer,16); //convert ID to hex-formeted text for later display
+            startofname = strrchr(input,' ') + 1; // name starts after last ' '.
+            if( (startofname-input+1) >= 16 ){// prevent name longer than sizeof(newname), 
+            // because input is 32 chars so if it starts at or after position 16 it is short enough
+            // though that ruins the posibility of decimal input for ID's... Those are given in .hex anyway so not a problem            
+                strcpy(newname,startofname); 
+            }
+            else
+            {
+            uart_puts_P("\nError: new name is too long or ID too short \n"); // if new name is longer then sizeof(newname)
+            strcpy(newname,"too long");                          // set it to something shorter. 
+            }
+            uart_puts_P("\nName set: ");            
+            uart_puts(buffer);            
+            uart_puts_P(", ");
+            uart_puts(newname);
+            uart_puts_P("\n");                      
+
+            // TODO: the store-in-eeprom part.
+            // for i in names find the unused/255 one and put this ID/name combo in, then update EEPROM            
+
+  
+        }
+       else
+        {
+         uart_puts_P("\nIncorrect data. Try setname [ID] [name (max 16)]\n");
         }
     }
 }
@@ -316,7 +348,8 @@ uart_puts_P("Hallo Wereld!\n");
         break;
         }
 
-  
+        readnewname(devnames); // try to read new device names from serial input  
+
         if(now-prevnow > 100){ //every second
         prevnow = now;
         numOn=0; // reset for recount.
@@ -327,7 +360,8 @@ uart_puts_P("Hallo Wereld!\n");
             //recount number of devices still on.        
                 if( devices[i].state==ON) numOn++;
             }
-        DisplayRefresh(); // somehow weergeven welke devices nog aan staan.
+            DisplayRefresh(); // serieel weergeven welke devices nog aan staan.
+            // TODO: add LCD display with only names of ON and NumOn
         }
           
     }
