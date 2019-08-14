@@ -39,6 +39,7 @@ D      0b10100110
 E      0b10101001
 F      0b10101010
 */
+/*
 const uint8_t m0 =0b01010101; //0x55
 const uint8_t m1 =0b01010110; //0x56
 const uint8_t m2 =0b01011001; //0x59
@@ -55,8 +56,8 @@ const uint8_t mC =0b10100101; //0xA5
 const uint8_t mD =0b10100110; //0xA6
 const uint8_t mE =0b10101001; //0xA9
 const uint8_t mF =0b10101010; //0xAA
+*/
 
-/*
 #define m0 (0b01010101) //0x55
 #define m1 (0b01010110) //0x56
 #define m2 (0b01011001) //0x59
@@ -73,7 +74,7 @@ const uint8_t mF =0b10101010; //0xAA
 #define mD (0b10100110) //0xA6
 #define mE (0b10101001) //0xA9
 #define mF (0b10101010) //0xAA
-*/
+
 
 //const uint32_t ID = ((mB<<24)+(mA<<16)+(mD<<8)+(m1)); // Unique ID. 0xBAD1 Pre-convert to manchester encoding (because why do that at runtime if it is a constant anyway) 
 // The shifting does not work with |, cannot be computed at load time while + does the same and can. Also does not work with const uint8_t's but does with #defines. Oh well.
