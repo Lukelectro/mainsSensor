@@ -72,6 +72,12 @@ void storedevnames(){ // store devnames in EEPROM (on modification)
     }
 }
 
+char* IDtoName(uint16_t ID){
+    for(int i=0;i<numdevs;i++){
+        if(devnames[i].ID==ID) return &devnames[i].name[0];
+    }
+}
+
 // TODO: serial input of new device names for each ID? setname 0x8234 slartibartfast 
 // TODO: add a way to erase ID/name combo's with unused or no longer used ID's (or wrongly entered)
 // maybe just set unused names to " ", and make it re-use those spots for new ID/name combinations?
@@ -222,10 +228,27 @@ uart_release();
 
 lcd_goto(0,0);
 for(uint8_t i = 0;i<20;i++) lcd_putc(' ');
-lcd_goto(0,0);
-lcd_puts("numOn ");
+lcd_goto(0,18);
 itoa(numOn,buffer,10);
 lcd_puts(buffer);
+lcd_goto(1,18);
+lcd_puts("ON");
+
+// TODO: Display NAMES of devices still on
+
+/*
+lcd_goto(0,0);
+lcd_puts("NaamVanDing0");
+
+lcd_goto(1,0);
+lcd_puts("NaamVanDing1");
+
+lcd_goto(2,0);
+lcd_puts("NaamVanDing2");
+
+lcd_goto(3,0);
+lcd_puts("NaamVanDin3");
+*/
 
 reenableuart();
 }
@@ -318,7 +341,9 @@ TIMSK0 = (1<<OCIE0A); // enable OC1A interrupt
 
 // set pin modes for LED/7seg/display/whateveroutputischoosen
 DDRC &=~(1<<PORTC2); // PORTC2 input for radio RX (Moved from PORTD for LCD on PORTD)
+DDRC |= (1<<PORTC3); // Debug LED == LCD backlite
 PORTC |= (1<<PORTC2); // PORTC2 pullup
+PORTC |= (1<<PORTC3); // turn backlite on
 
 uart_puts_P("Hallo Wereld!\nEr zal wat line noise zijn omdat het LCD op dezelfde poort zit, dat geeft niet!\n"); 
 _delay_ms(10); 
