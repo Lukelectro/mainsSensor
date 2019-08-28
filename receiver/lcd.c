@@ -152,7 +152,7 @@ void lcd_cursor(bool cursorOn, bool cursorBlinks) {
 }
 
 void lcd_goto(uint8_t row, uint8_t column) {
-	if (row<2 && column<16) {
+	if (row<4 && column<20) {
 		lcd_write_command(0x80+row*0x40+column);
 	}
 }
