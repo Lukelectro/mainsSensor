@@ -480,6 +480,10 @@ void uart_init(unsigned int baudrate)
 
 }/* uart_init */
 
+void uart_release(){
+    UART0_CONTROL &= ~ (_BV(UART0_BIT_RXCIE)|(1<<UART0_BIT_RXEN)|(1<<UART0_BIT_TXEN)); /* revert what's done in uart_init, relaease the pins for gpio*/
+}
+
 
 /*************************************************************************
 Function: uart_getc()
