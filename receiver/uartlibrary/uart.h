@@ -119,6 +119,8 @@ LICENSE:
 extern void uart_init(unsigned int baudrate);
 
 
+extern void uart_release(void); // added by luke to use LCD on same port as uart
+
 /**
  *  @brief   Get received byte from ringbuffer
  *

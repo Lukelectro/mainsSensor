@@ -19,7 +19,9 @@
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
 #include "./uartlibrary/uart.h"
+#include "lcd.h"
 #define UART_BAUD_RATE 115200
+#define reenableuart() uart_init(UART_BAUD_SELECT(UART_BAUD_RATE,F_CPU))
 
 enum status {NOTINUSE=0, ON, ON_1st, OFF, PRESUMED_OFF, GARBLE}; 
 /* 
@@ -117,15 +119,31 @@ uint8_t processed=0; // is this device allready updated?
 
 }
 
-
-void DisplayRefresh(void){
-// Transmit over serial: numon (number of devices still ON) and ID of all devices still on / OFF/Presumed off.
 // Display number of devices still on (either on a LED if numon>0, or on 7segment displays, or on a LCD)
 // Display device ID's still on.
 // TODO: Maybe even display device names for those ID's, but that would require a lookup table. That would need te be editable or known at compile time. Both difficult.
+void LCD_refresh(void){
+char buffer[7];
+
+_delay_ms(10); // so it can finish serial transmission
+uart_release();
+
+lcd_goto(0,0);
+for(uint8_t i = 0;i<20;i++) lcd_putc(' ');
+lcd_goto(0,0);
+lcd_puts("numOn ");
+itoa(numOn,buffer,10);
+lcd_puts(buffer);
+
+reenableuart();
+}
+
+void SerialRefresh(void){
+// Transmit over serial: numon (number of devices still ON) and ID of all devices still on / OFF/Presumed off.
 
 char buffer[7];
 unsigned int count=0;
+
 uart_puts_P("NumOn: ");
 itoa(numOn,buffer,10);
 uart_puts(buffer);
@@ -205,12 +223,18 @@ OCR0A = 100;       // 16MHz/8/100= 20kHz --- 50 us
 TIMSK0 = (1<<OCIE0A); // enable OC1A interrupt
 
 // set pin modes for LED/7seg/display/whateveroutputischoosen
-DDRC |= 0xFF; // all outputs. For LED's (Except C6 as that is reset)
-DDRD &=~(1<<PORTD2); // PORTD2 input
-PORTD |= (1<<PORTD2); // PORTD2 pullup
+DDRC &=~(1<<PORTC2); // PORTC2 input for radio RX (Moved from PORTD for LCD on PORTD)
+PORTC |= (1<<PORTC2); // PORTC2 pullup
 
-uart_puts_P("Hallo Wereld!\n"); 
+uart_puts_P("Hallo Wereld!\nEr zal wat line noise zijn omdat het LCD op dezelfde poort zit, dat geeft niet!\n"); 
+_delay_ms(10); 
 
+uart_release();/* LCD on same port as serial...*/
+lcd_init();
+lcd_puts("Hallo Wereld!");
+lcd_cursor(false,false);
+_delay_ms(1000); /* LCD on same port as serial...*/
+reenableuart(); /* LCD on same port as serial...*/
 
     while(1){
    
@@ -265,7 +289,8 @@ uart_puts_P("Hallo Wereld!\n");
             //recount number of devices still on.        
                 if( devices[i].state==ON) numOn++;
             }
-        DisplayRefresh(); // somehow weergeven welke devices nog aan staan.
+        SerialRefresh(); // somehow weergeven welke devices nog aan staan.
+        LCD_refresh();
         }
           
     }
@@ -287,7 +312,7 @@ static uint16_t timer, timestamp; // it should also work with 8 bit timestamps (
     }
 prescale++;
 timer++; // use seperate variable that does not reset at 200 but overflows like expected.
-tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it once to prevent race conditions
+tmp=(PINC&(1<<PINC2)); // because PINC is volatile but I only want to read it once to prevent race conditions
 
     if(prev!=tmp){ // detect edges
         prev=tmp;
@@ -330,7 +355,7 @@ tmp=(PIND&(1<<PIND2)); // because PIND is volatile but I only want to read it on
                 if((timer-timestamp)>=10){ //  at least 10*50 = 500 us appart (half a bittime is about 200+ us) (Otherwise, wait longer and continue)
                     rec_buff=rec_buff<<1; // shift in the (previous) bits before adding a new one (or a new zero)                
                     if(!tmp){
-                        rec_buff|=1; // if PIND2 is low now, it was a high-to-low transition, so a 1.
+                        rec_buff|=1; // if PINC2 is low now, it was a high-to-low transition, so a 1.
                     }                
                     bitcnt--;             // and count them
                     timestamp = timer;
