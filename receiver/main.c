@@ -59,21 +59,14 @@ volatile enum rec_state {START,WAITFORSYNC,IDH,IDL,AANUIT,PROCESS} rec_st = STAR
 
 void readdevnames(){ // read devnames from EEPROM (on bootup)
     uint8_t size = sizeof(devnames[0]); // they are all the same size (18 bytes, but still use sizeoff in case it changes)    
-    for(unsigned int i = 0; i<numdevs; i++){
-    eeprom_read_block(&devnames[i],(void*)(i*size),size);
-    }
-    // TEMP, for test, XXX
-    strcpy(devnames[0].name,"Peertje123");
-    devnames[0].ID=0x8442; 
-
+    
+    eeprom_read_block(&devnames[0], 0 ,size*numdevs); 
 }
 
 void storedevnames(){ // store devnames in EEPROM (on modification) 
 // use EEPROM update, so when data is the same, nothing gets rewritten (saves wear);
     uint8_t size = sizeof(devnames[0]); // they are all the same size (18 bytes, but still use sizeoff in case it changes)    
-    for(unsigned int i = 0; i<numdevs ; i++){
-        eeprom_update_block(&devnames[i],(void*)(i*size),size);
-    }
+    eeprom_update_block(&devnames[0],0,size*numdevs);
 }
 
 char* IDtoName(uint16_t ID){
@@ -106,8 +99,8 @@ void readnewname(DNS* names){
         if(i<31) i++;
     }     
     
-    if((i==31) || (13==buff) || (10==buff) ){ // On CR, LF or 32 characters input (use buff because i++)
-        input[i]=NULL; // correctly terminate string for further processing        
+    if((i==31) || (13==buff) ){ // On 32 characters input, or CR (use buff because i++) (If you want to add LF: || (10==buff))
+        input[i]=0; // correctly terminate string for further processing        
         i=0;
         buff = 0; // so it does not keep looping this
         if(0==strncmp(input,"setname",7)){ // if correctly formed command (use strncmp or strstr?)
@@ -140,7 +133,7 @@ void readnewname(DNS* names){
             uart_puts(newname);
             uart_puts_P("\n");                      
 
-            // TODO: the store-in-eeprom part.
+            // the store-in-eeprom part.
             // for i in names find the unused/255 one and put this ID/name combo in, then update EEPROM 
         
             exists=false;
@@ -160,7 +153,7 @@ void readnewname(DNS* names){
                     }
                 }
             }          
-            //TODO: update_EEPROM? (There was a thing that only wrote data if it was indeed changed)
+            storedevnames(); //update_EEPROM (only writes data if it is indeed changed)
         }
         else
         {
@@ -244,42 +237,43 @@ uint8_t processed=0; // is this device allready updated?
 // TODO: Maybe even display device names for those ID's, but that would require a lookup table. That would need te be editable or known at compile time. Both difficult.
 void LCD_refresh(void){
 char buffer[7];
+uint8_t num;
+//static unsigned int whichnameareweat = 0; // Maybe later scroll the names
 
 _delay_ms(10); // so it can finish serial transmission
-uart_release();
+uart_release();// lcd/uart share pins
+lcd_cls();     // clear lcd so devices that are now OFF are not still displayed
 
-lcd_goto(0,0);
-for(uint8_t i = 0;i<20;i++) lcd_putc(' ');
-lcd_goto(0,18);
-itoa(numOn,buffer,10);
-lcd_puts(buffer);
-lcd_goto(1,18);
-lcd_puts("ON");
-
-// TODO: Display NAMES of devices still on
-
-for(int i =0;i<numdevs;i++){
-    if(devices[i].state==ON){
-        char* name = IDtoName(devices[i].ID);
-        if(name!=NULL) lcd_puts(name);
+// turn backlite on if there is still devices ON, and off otherwise.
+// also, display names of devices still ON if there are devices still ON, otherwise display a message saying all is OFF.
+    if(numOn>0){ 
+        
+        PORTC |= (1<<PORTC3); 
+        itoa(numOn,buffer,10);
+        lcd_puts(buffer);
+        if(numOn==1) lcd_puts(" ding nog aan"); else lcd_puts(" dingen nog aan");
+        lcd_goto(1,0);
+// Display NAMES of devices still on:
+        num = 1;
+        for(unsigned int i =0;i<numdevs;i++){
+            if(devices[i].state==ON){
+                char* name = IDtoName(devices[i].ID);
+                if(name!=NULL){ 
+                    lcd_puts(name);
+                    num++;
+                }
+                lcd_goto(num,0);
+                if(num>3) break; // can display at maximum 3 names...
+            }
+        }
     }
-}
-
-/*
-lcd_goto(0,0);
-lcd_puts("NaamVanDing0");
-
-lcd_goto(1,0);
-lcd_puts("NaamVanDing1");
-
-lcd_goto(2,0);
-lcd_puts("NaamVanDing2");
-
-lcd_goto(3,0);
-lcd_puts("NaamVanDin3");
-*/
-
-reenableuart();
+    else{
+        PORTC &= ~(1<<PORTC3);  // Backlite OFF
+        lcd_puts("Alles met een sensor");
+        lcd_goto(1,0);
+        lcd_puts("is uit");
+    }
+    reenableuart();
 }
 
 void SerialRefresh(void){
@@ -374,14 +368,23 @@ DDRC |= (1<<PORTC3); // Debug LED == LCD backlite
 PORTC |= (1<<PORTC2); // PORTC2 pullup
 PORTC |= (1<<PORTC3); // turn backlite on
 
-uart_puts_P("Hallo Wereld!\nEr zal wat line noise zijn omdat het LCD op dezelfde poort zit, dat geeft niet!\n"); 
+uart_puts_P("Hallo Wereld!\nEr zal wat line noise zijn omdat het LCD op dezelfde poort zit, dat is bekend en kan geen kwaad!\n\n"); 
 _delay_ms(10); 
 
 uart_release();/* LCD on same port as serial...*/
 lcd_init();
-lcd_puts("Hallo Wereld!");
 lcd_cursor(false,false);
-_delay_ms(1000); /* LCD on same port as serial...*/
+lcd_goto(0,0);
+lcd_puts("Hallo Wereld! 1");
+lcd_goto(1,0);
+lcd_puts("Hallo Wereld! 2");
+//lcd_goto(0,20); //actually 3,0, but 4x20 display is implemented as 2x40... So modified LCD.C instead
+lcd_goto(2,0);
+lcd_puts("Hallo Wereld! 3");
+//lcd_goto(1,20); //actually 4,0, but 4x20 display is implemented as 2x40...
+lcd_goto(3,0);
+lcd_puts("Hallo Wereld! 4");
+_delay_ms(1000);
 reenableuart(); /* LCD on same port as serial...*/
 
     while(1){

@@ -152,8 +152,12 @@ void lcd_cursor(bool cursorOn, bool cursorBlinks) {
 }
 
 void lcd_goto(uint8_t row, uint8_t column) {
-	if (row<4 && column<20) {
+	if (row<2 && column<20) { 
 		lcd_write_command(0x80+row*0x40+column);
+	}
+    // 4x20 displays are usualy implemented as 2x40
+    if (row>1 && column<20) { 
+		lcd_write_command(0x80+(row-2)*0x40+(column+20));
 	}
 }
 
