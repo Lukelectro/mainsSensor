@@ -62,6 +62,10 @@ void readdevnames(){ // read devnames from EEPROM (on bootup)
     for(unsigned int i = 0; i<numdevs; i++){
     eeprom_read_block(&devnames[i],(void*)(i*size),size);
     }
+    // TEMP, for test, XXX
+    strcpy(devnames[0].name,"Peertje123");
+    devnames[0].ID=0x8442; 
+
 }
 
 void storedevnames(){ // store devnames in EEPROM (on modification) 
@@ -76,6 +80,7 @@ char* IDtoName(uint16_t ID){
     for(int i=0;i<numdevs;i++){
         if(devnames[i].ID==ID) return &devnames[i].name[0];
     }
+    return NULL;
 }
 
 // TODO: serial input of new device names for each ID? setname 0x8234 slartibartfast 
@@ -89,6 +94,7 @@ void readnewname(DNS* names){
     uint16_t newID;
     char newname[16], buff, buffer[7];   
     char* startofname;
+    bool exists = false;
 
     /* per time this function gets called, one character gets read form buffer, so call periodically */
 
@@ -105,7 +111,7 @@ void readnewname(DNS* names){
         i=0;
         buff = 0; // so it does not keep looping this
         if(0==strncmp(input,"setname",7)){ // if correctly formed command (use strncmp or strstr?)
-        IDL = strtoul((void*)(input+7),NULL,0); // begin 7 leters into input string, so skip the "setname" and start at the ID ( hex as 0x... or decimal)        
+            IDL = strtoul((void*)(input+7),NULL,0); // begin 7 leters into input string, so skip the "setname" and start at the ID ( hex as 0x... or decimal)        
         }
         else
         {
@@ -125,8 +131,8 @@ void readnewname(DNS* names){
             }
             else
             {
-            uart_puts_P("\nError: new name is too long or ID too short \n"); // if new name is longer then sizeof(newname)
-            strcpy(newname,"too long");                          // set it to something shorter. 
+                uart_puts_P("\nError: new name is too long or ID too short \n"); // if new name is longer then sizeof(newname)
+                strcpy(newname,"too long");                          // set it to something shorter. 
             }
             uart_puts_P("\nName set: ");            
             uart_puts(buffer);            
@@ -135,17 +141,33 @@ void readnewname(DNS* names){
             uart_puts_P("\n");                      
 
             // TODO: the store-in-eeprom part.
-            // for i in names find the unused/255 one and put this ID/name combo in, then update EEPROM            
-
-  
+            // for i in names find the unused/255 one and put this ID/name combo in, then update EEPROM 
+        
+            exists=false;
+            for(int i=0;i<numdevs;i++){
+                if(devnames[i].ID == newID){ // If this ID allready has a name, change its name
+                    strcpy(devnames[i].name,newname);
+                    exists = true;
+                    break;
+                }
+            }
+            if(exists == false){ //if ID is not found
+                for(int i=0;i<numdevs;i++){
+                    if((devnames[i].name[0]==255)||(devnames[i].name[0]==' ')||(devnames[i].name[0]=='\n')){ 
+                    // names that start with 255 (empty EEPROM), " " or newline are empty spots
+                    devnames[i].ID=newID;
+                    strcpy(devnames[i].name,newname); 
+                    }
+                }
+            }          
+            //TODO: update_EEPROM? (There was a thing that only wrote data if it was indeed changed)
         }
-       else
+        else
         {
          uart_puts_P("\nIncorrect data. Try setname [ID] [name (max 16)]\n");
         }
     }
 }
-
 
 void updateDevice(uint16_t ID, uint8_t MSG){
 // find device in array and update it, and if it's not there, add it.
@@ -235,6 +257,13 @@ lcd_goto(1,18);
 lcd_puts("ON");
 
 // TODO: Display NAMES of devices still on
+
+for(int i =0;i<numdevs;i++){
+    if(devices[i].state==ON){
+        char* name = IDtoName(devices[i].ID);
+        if(name!=NULL) lcd_puts(name);
+    }
+}
 
 /*
 lcd_goto(0,0);
