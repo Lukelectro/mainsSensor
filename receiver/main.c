@@ -59,14 +59,17 @@ volatile enum rec_state {START,WAITFORSYNC,IDH,IDL,AANUIT,PROCESS} rec_st = STAR
 
 void readdevnames(){ // read devnames from EEPROM (on bootup)
     uint8_t size = sizeof(devnames[0]); // they are all the same size (18 bytes, but still use sizeoff in case it changes)    
-    
-    eeprom_read_block(&devnames[0], 0 ,size*numdevs); 
+    for(unsigned int i = 0;i<numdevs;i++){
+        eeprom_read_block(&devnames[i], i*size ,size); // TODO: test this!
+    }
 }
 
-void storedevnames(){ // store devnames in EEPROM (on modification) 
+void storedevnames(){ // store devnames in EEPROM (on modification) (NOTE: EEPROM on ATMEGA328p is 1024 bytes) 
 // use EEPROM update, so when data is the same, nothing gets rewritten (saves wear);
     uint8_t size = sizeof(devnames[0]); // they are all the same size (18 bytes, but still use sizeoff in case it changes)    
-    eeprom_update_block(&devnames[0],0,size*numdevs);
+    for(unsigned int i = 0;i<numdevs;i++){
+        eeprom_update_block(&devnames[i], i*size ,size); // TODO: test this!
+    }
 }
 
 char* IDtoName(uint16_t ID){
@@ -100,7 +103,7 @@ void readnewname(DNS* names){
     }     
     
     if((i==31) || (13==buff) ){ // On 32 characters input, or CR (use buff because i++) (If you want to add LF: || (10==buff))
-        input[i]=0; // correctly terminate string for further processing        
+        if(i==31) input[i]=NULL; else input[i-1]=NULL; // correctly terminate string for further processing        
         i=0;
         buff = 0; // so it does not keep looping this
         if(0==strncmp(input,"setname",7)){ // if correctly formed command (use strncmp or strstr?)
@@ -150,6 +153,7 @@ void readnewname(DNS* names){
                     // names that start with 255 (empty EEPROM), " " or newline are empty spots
                     devnames[i].ID=newID;
                     strcpy(devnames[i].name,newname); 
+                    break; // don't fill the entire EEPROM with 1 ID/name combo!!
                     }
                 }
             }          
