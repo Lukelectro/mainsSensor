@@ -24,10 +24,9 @@
 
 
 uint16_t ID_16b = 0xFEE7;   // Input ID here (TODO: put it at a fixed address in flash and change the .hex just before programming).
-uint32_t ID;                // this holds the ID after conversion to machester encoder
 uint8_t HIcrc=0, BYEcrc=0;  // crc for hi-message and Bye-message, before conversion to manchester encoding
 uint16_t MHIcrc, MBYEcrc;   // crc's after conversion to manchester encoding
-uint16_t IDH, IDL;          // manchester-encoded ID split in 16 bit units, so this is not done at transmit time but before.
+volatile uint16_t IDH, IDL; // manchester-encoded ID split in 16 bit units, so this is not done at transmit time but before.
 // no decisionmaking while transmitting, it affects timing too much at this slow clocrate. So have a HIframe and a byeframe ready beforehand. Including their CRC's, and with pre-split ID. 
 
 
@@ -61,23 +60,6 @@ uint16_t manch=0;
         else
         {
             manch|=1; //0b10     
-        }
-        in=in<<1;    
-    }
-return manch;
-}
-
-uint32_t tomanch_16(uint16_t in){
-//could reuse manch_8, won't.
-uint32_t manch=0;
-    for(uint8_t i=0;i<16;i++){
-    manch=manch<<2;
-        if((in&0x8000) != 0){
-            manch|=2;
-        }
-        else
-        {
-            manch|=1;        
         }
         in=in<<1;    
     }
@@ -149,19 +131,19 @@ EIMSK = 0x01; // enable INT0
 
 
 /* do the waiting after the right clock is selected! (And in the meantime, calculate the CRC's etc.)*/
-ID = tomanch_16(ID_16b); // convert ID to manchester
-//TODO: calculate CRC's
-HIcrc= _crc8_ccitt_update(HIcrc,((ID>>16)&0x00FF)); // first bit of ID
-HIcrc= _crc8_ccitt_update(HIcrc,(ID&0x00FF));       // 2nd bit of ID
-BYEcrc=HIcrc; // those are the same for both, so coppy
+
+// convert ID to manchester, and split into 2
+IDH=tomanch_8( (ID_16b>>8)&0xFF );
+IDL=tomanch_8(ID_16b&0xFF);
+// calculate CRC's
+HIcrc= _crc8_ccitt_update(HIcrc,((ID_16b>>8)&0xFF)); // first bit of ID
+HIcrc= _crc8_ccitt_update(HIcrc,(ID_16b&0xFF));       // 2nd bit of ID
+BYEcrc=HIcrc; // ID is the same for both, so coppy
 HIcrc= _crc8_ccitt_update(HIcrc,0xFF);              // HI-msg
 BYEcrc= _crc8_ccitt_update(BYEcrc,0x00);           // BYE-msg
 //convert crc's to manchester:
 MHIcrc=tomanch_8(HIcrc);
 MBYEcrc=tomanch_8(BYEcrc);
-//precalculate split ID, so that is not done at transmit time:
-IDL=ID&0xFFFF;
-IDH=(ID>>16)&0xFFFF;
 
 
 while((PINB&(1<<PINB2))==0); // wait untill bulk cap is charged
