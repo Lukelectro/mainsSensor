@@ -23,10 +23,10 @@
 // uses crc8 with 0 as initial value and Polynomial: x^8 + x^2 + x + 1 (0xE0).
 
 
-uint16_t ID_16b = 0xFEE7;   // Input ID here (TODO: put it at a fixed address in flash and change the .hex just before programming).
+uint16_t ID_16b = 0xABCD;   // Input ID here (TODO: put it at a fixed address in flash and change the .hex just before programming).
 uint8_t HIcrc=0, BYEcrc=0;  // crc for hi-message and Bye-message, before conversion to manchester encoding
 uint16_t MHIcrc, MBYEcrc;   // crc's after conversion to manchester encoding
-volatile uint16_t IDH, IDL; // manchester-encoded ID split in 16 bit units, so this is not done at transmit time but before.
+uint16_t IDH, IDL; // manchester-encoded ID split in 16 bit units, so this is not done at transmit time but before.
 // no decisionmaking while transmitting, it affects timing too much at this slow clocrate. So have a HIframe and a byeframe ready beforehand. Including their CRC's, and with pre-split ID. 
 
 
@@ -89,7 +89,7 @@ _delay_us(HALFBITTIME*4);
 transmit(IDH); // MSB first
 transmit(IDL);
 transmit(0xAAAA); // HI = 0xFF, in manchester 0b1010 1010 1010 1010 (0xAAAA)
-//transmit(MHIcrc);
+transmit(MHIcrc);
 PORTB=0; // always end with the pin LOW
 }
 
@@ -103,7 +103,8 @@ _delay_us(HALFBITTIME*4);
 transmit(IDH); // MSB first
 transmit(IDL);
 transmit(0x5555); // Bye=0x00, in manchester 0b0101 0101 0101 0101 (0x5555) 
-//transmit(MBYEcrc);
+//transmit(0xAAAA); // because transmitHIframe works and transmitBYEframe doesn't, let's see what happens if there is no difference
+transmit(MBYEcrc);
 PORTB=0; // always end with the pin LOW
 }
 
@@ -161,7 +162,7 @@ while(1){   // re-transmit HI message every half a minute / repeat untill powerd
     _delay_ms(100);
     transmitHIframe();    // no longer using the 0xFF preamble, so can transmit the actual message more often, so will transmit the actual message more often    
     //_delay_ms(30000); 
-    _delay_ms(10000); // or test with 10s...
+    _delay_ms(5000); // or test with 5s...
     }
 }
 

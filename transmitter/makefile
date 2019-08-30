@@ -100,7 +100,7 @@ LIBS=
 
 # Optimization level, 
 # use s (size opt, default), 1, 2, 3 or 0 (off), ...or g for debug.
-OPTLEVEL=s
+OPTLEVEL=g
 
 
 #####      AVR Dude 'writeflash' options       #####
