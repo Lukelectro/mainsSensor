@@ -6,19 +6,30 @@
 
 //#define t45
 #define t10
-
 // TODO: Please note: do not forget to edit the makefile as well when changing MCU between attiny45 and attiny10 (in 2 places), and when using t45, set its fuses correctly.
 
 #define F_CPU 128000UL // 128 Khz internal osc. (t45 lfuse:E4, rest default. 0x64 for ckdiv8 16 kHz clock, 0x62 default 8/8=1Mhz. t10 clock can be changed at runtime, t45 clock can not be changed at runtime.)
 
 #define HALFBITTIME 200 // us, actual value slightly larger because normal instructions take time too and add to delay.
-
 // NOTE: It will be real slow then, so limit bitclock for programming: avrdude -p t45 -c dragon_isp -t -B 50 (400 at 16Khz)
 // NOTE: Do NOT enable debugwire at this slow clock. It will make reprogramming impossible (debug won't work either so it bricks the chip, btdt)
 
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
+#include <util/crc16.h>
+
+// Rewritten to use CRC. Is calculated at runtime despite messages / ID being constant, this eases changing ID.
+// uses crc8 with 0 as initial value and Polynomial: x^8 + x^2 + x + 1 (0xE0).
+
+
+uint16_t ID_16b = 0xFEE7;   // Input ID here (TODO: put it at a fixed address in flash and change the .hex just before programming).
+uint32_t ID;                // this holds the ID after conversion to machester encoder
+uint8_t HIcrc=0, BYEcrc=0;  // crc for hi-message and Bye-message, before conversion to manchester encoding
+uint16_t MHIcrc, MBYEcrc;   // crc's after conversion to manchester encoding
+uint16_t IDH, IDL;          // manchester-encoded ID split in 16 bit units, so this is not done at transmit time but before.
+// no decisionmaking while transmitting, it affects timing too much at this slow clocrate. So have a HIframe and a byeframe ready beforehand. Including their CRC's, and with pre-split ID. 
+
 
 /*
 normal manchester
@@ -39,57 +50,42 @@ D      0b10100110
 E      0b10101001
 F      0b10101010
 */
-/*
-const uint8_t m0 =0b01010101; //0x55
-const uint8_t m1 =0b01010110; //0x56
-const uint8_t m2 =0b01011001; //0x59
-const uint8_t m3 =0b01011010; //0x5A
-const uint8_t m4 =0b01100101; //0x65
-const uint8_t m5 =0b01100110; //0x66
-const uint8_t m6 =0b01101001; //0x69
-const uint8_t m7 =0b01101010; //0x6A // start seeing a pattern here...
-const uint8_t m8 =0b10010101; //0x95
-const uint8_t m9 =0b10010110; //0x96
-const uint8_t mA =0b10011001; //0x99
-const uint8_t mB =0b10011010; //0x9A
-const uint8_t mC =0b10100101; //0xA5
-const uint8_t mD =0b10100110; //0xA6
-const uint8_t mE =0b10101001; //0xA9
-const uint8_t mF =0b10101010; //0xAA
-*/
 
-#define m0 (0b01010101) //0x55
-#define m1 (0b01010110) //0x56
-#define m2 (0b01011001) //0x59
-#define m3 (0b01011010) //0x5A
-#define m4 (0b01100101) //0x65
-#define m5 (0b01100110) //0x66
-#define m6 (0b01101001) //0x69
-#define m7 (0b01101010) //0x6A // start seeing a pattern here...
-#define m8 (0b10010101) //0x95
-#define m9 (0b10010110) //0x96
-#define mA (0b10011001) //0x99
-#define mB (0b10011010) //0x9A
-#define mC (0b10100101) //0xA5
-#define mD (0b10100110) //0xA6
-#define mE (0b10101001) //0xA9
-#define mF (0b10101010) //0xAA
+uint16_t tomanch_8(uint8_t in){ //1->10 0->01 
+uint16_t manch=0;
+    for(uint8_t i=0;i<8;i++){
+    manch=manch<<2;    // shift manch firts, so not shifting out significant bits on last iteration of the loop
+        if((in&0x80) != 0){
+            manch|=2; // 0b10
+        }
+        else
+        {
+            manch|=1; //0b10     
+        }
+        in=in<<1;    
+    }
+return manch;
+}
+
+uint32_t tomanch_16(uint16_t in){
+//could reuse manch_8, won't.
+uint32_t manch=0;
+    for(uint8_t i=0;i<16;i++){
+    manch=manch<<2;
+        if((in&0x8000) != 0){
+            manch|=2;
+        }
+        else
+        {
+            manch|=1;        
+        }
+        in=in<<1;    
+    }
+return manch;
+}
 
 
-//const uint32_t ID = ((mB<<24)+(mA<<16)+(mD<<8)+(m1)); // Unique ID. 0xBAD1 Pre-convert to manchester encoding (because why do that at runtime if it is a constant anyway) 
-// The shifting does not work with |, cannot be computed at load time while + does the same and can. Also does not work with const uint8_t's but does with #defines. Oh well.
-// Found it: first cast as 32 bit, then shift, otherwise all the usefull bits get shifted out
-const uint32_t ID = (( (uint32_t) mF<<24)|((uint32_t) mF<<16)|((uint32_t)mF<<8)|(mF));   
-
-// NOTE: make sure ID starts with a "1", so a 8,9,a,b,c,d,e, or f as first nibble.
-
-//const uint32_t ID = 0x9A99A656; // BAD1, writen differently because auto-convert seems to still not to function as Intended. (Starts with a lot of 1's in a row somwhow)
-//const uint32_t ID = 0x9A5A5A66; // B335
-//const uint32_t ID = 0xA599AAA9; // CAFE
-
-
-
-void transmitmanch(uint16_t tx){ 
+void transmit(uint16_t tx){ 
   
 uint8_t i=0;
   do{
@@ -102,49 +98,30 @@ uint8_t i=0;
 }
 
 void transmitHIframe(){
-transmitmanch((mF<<8)|mF); // Bias RX/TX / preamble.
-transmitmanch((mF<<8)|mF); 
-transmitmanch((mF<<8)|mF);
-transmitmanch((mF<<8)|mF);
-transmitmanch((mF<<8)|mF);
-transmitmanch((mF<<8)|mF);
-transmitmanch((mF<<8)|mF);
-//transmitmanch((mA<<8)|m5); // sync word, pre converted to machester 0xA5 = 0b10100101 -manch-> 0b1001 1001 0110 0110 = 0x9966
-    
 /* sync bit / start bit instead, with easy-to-detect timing (slower) */
 PORTB=(1<<PORTB1);
 _delay_us(HALFBITTIME*4);
 PORTB=0;
 _delay_us(HALFBITTIME*4);
   
-transmitmanch((ID>>16)&0xFFFF); // MSB first
-transmitmanch(ID&0xFFFF);
-//    if(HinBye) transmitmanch((mF<<8)|mF); else transmitmanch((m0<<8)|m0); // Hi=0xFF, Bye=0x00. 
-// nice idea, but too timing sensitive... no decisionmaking while transmitting
-transmitmanch((mF<<8)|mF);
+transmit(IDH); // MSB first
+transmit(IDL);
+transmit(0xAAAA); // HI = 0xFF, in manchester 0b1010 1010 1010 1010 (0xAAAA)
+transmit(MHIcrc);
 PORTB=0; // always end with the pin LOW
 }
 
 void transmitBYEframe(){
-//HinBye is used as bool, 0 means "Bye", all else means "Hi"
-transmitmanch((mF<<8)|mF); // Bias RX/TX / preamble.
-transmitmanch((mF<<8)|mF); 
-transmitmanch((mF<<8)|mF);
-transmitmanch((mF<<8)|mF);
-transmitmanch((mF<<8)|mF);
-transmitmanch((mF<<8)|mF);
-transmitmanch((mF<<8)|mF);
-//transmitmanch((mA<<8)|m5); // sync word, pre converted to machester 0xA5 = 0b10100101 -manch-> 0b1001 1001 0110 0110 = 0x9966
-    
 /* sync bit / start bit instead, with easy-to-detect timing (slower) */
 PORTB=(1<<PORTB1);
 _delay_us(HALFBITTIME*4);
 PORTB=0;
 _delay_us(HALFBITTIME*4);
   
-transmitmanch((ID>>16)&0xFFFF); // MSB first
-transmitmanch(ID&0xFFFF);
-transmitmanch((m0<<8)|m0); // Bye=0x00. 
+transmit(IDH); // MSB first
+transmit(IDL);
+transmit(0x5555); // Bye=0x00, in manchester 0b0101 0101 0101 0101 (0x5555) 
+transmit(MBYEcrc);
 PORTB=0; // always end with the pin LOW
 }
 
@@ -171,7 +148,22 @@ EIMSK = 0x01; // enable INT0
 #endif
 
 
-/* do the waiting after the right clock is selected! */
+/* do the waiting after the right clock is selected! (And in the meantime, calculate the CRC's etc.)*/
+ID = tomanch_16(ID_16b); // convert ID to manchester
+//TODO: calculate CRC's
+HIcrc= _crc8_ccitt_update(HIcrc,((ID>>16)&0x00FF)); // first bit of ID
+HIcrc= _crc8_ccitt_update(HIcrc,(ID&0x00FF));       // 2nd bit of ID
+BYEcrc=HIcrc; // those are the same for both, so coppy
+HIcrc= _crc8_ccitt_update(HIcrc,0xFF);              // HI-msg
+BYEcrc= _crc8_ccitt_update(BYEcrc,0x00);           // BYE-msg
+//convert crc's to manchester:
+MHIcrc=tomanch_8(HIcrc);
+MBYEcrc=tomanch_8(BYEcrc);
+//precalculate split ID, so that is not done at transmit time:
+IDL=ID&0xFFFF;
+IDH=(ID>>16)&0xFFFF;
+
+
 while((PINB&(1<<PINB2))==0); // wait untill bulk cap is charged
 _delay_ms(5000); // and slightly longer, because input flips before it is full enough.
 
@@ -179,13 +171,15 @@ sei(); // Enable interupts after PB2 is high
 
 transmitHIframe(); // transmit powerup message
 _delay_ms(5000);   // next one in 5 s.
+transmitHIframe(); // transmit powerup message
+_delay_ms(5000);   // next one in 5 s.
 
-while(1){
-    //transmitframe(1); // retransmit powerup msg every minute or so
+while(1){   // re-transmit HI message every half a minute / repeat untill powerdown.
     transmitHIframe();    
-    //_delay_ms(60000);
-    _delay_ms(30000); // or half a minute.
-    //_delay_ms(10000); // so let's test with 10s...
+    _delay_ms(100);
+    transmitHIframe();    // no longer using the 0xFF preamble, so can transmit the actual message more often, so will transmit the actual message more often    
+    //_delay_ms(30000); 
+    _delay_ms(10000); // or test with 10s...
     }
 }
 
@@ -197,9 +191,9 @@ ISR(BADISR_vect)
 
 ISR(INT0_vect){ //note INT0 is on PB2 
 
-// if PB2 is low, power failed / is going down
+// if PB2 is low, power failed / is going down, so transmit goodbye message on bulk capacitor charge
     do{
-        transmitBYEframe(); // transmit goodbye
+        transmitBYEframe(); 
         _delay_ms(3); // give reciever a bit of time (to optionally proces an error and wait for syncbit again)
     }while((PINB&(1<<PINB2))==0); // until power goes out or returns.
 }
