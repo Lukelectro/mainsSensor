@@ -107,7 +107,7 @@ _delay_us(HALFBITTIME*4);
 transmit(IDH); // MSB first
 transmit(IDL);
 transmit(0xAAAA); // HI = 0xFF, in manchester 0b1010 1010 1010 1010 (0xAAAA)
-transmit(MHIcrc);
+//transmit(MHIcrc);
 PORTB=0; // always end with the pin LOW
 }
 
@@ -121,7 +121,7 @@ _delay_us(HALFBITTIME*4);
 transmit(IDH); // MSB first
 transmit(IDL);
 transmit(0x5555); // Bye=0x00, in manchester 0b0101 0101 0101 0101 (0x5555) 
-transmit(MBYEcrc);
+//transmit(MBYEcrc);
 PORTB=0; // always end with the pin LOW
 }
 
