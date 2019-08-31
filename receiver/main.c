@@ -10,7 +10,7 @@
 /* If defined, also records new devices if their messages are garbled or OFF, 
  * otherwise only record new devices that are ON, so OFF messages only get accepted from devices that where ON previously and garbled messages get ignored 
  */
-//#define LOG_ALL 
+#define LOG_ALL 
 
 
 #include <stdlib.h>
@@ -55,7 +55,7 @@ uint8_t numOn;
 volatile uint8_t rec_buff;
 volatile int8_t bitcnt;
 volatile enum bit_state {WAITFORSTARTH, WAITFORSTARTL, OTHERBITS} bit_st=WAITFORSTARTH;
-volatile enum rec_state {START,WAITFORSYNC,IDH,IDL,AANUIT,PROCESS} rec_st = START;
+volatile enum rec_state {START,WAITFORSYNC,IDH,IDL,AANUIT, CRC ,PROCESS} rec_st = START;
 
 void readdevnames(){ // read devnames from EEPROM (on bootup)
     uint8_t size = sizeof(devnames[0]); // they are all the same size (18 bytes, but still use sizeoff in case it changes)    
@@ -353,7 +353,7 @@ uart_puts_P("ID's that so far only sent 1 ON msg (ON_1st):");
 
 int main(void){
 static uint16_t prevnow=0, ID;
-static uint8_t MSG;
+static uint8_t MSG,crc;
 
 readdevnames(); // read device names into RAM from EEPROM on bootup
 
@@ -368,7 +368,7 @@ TIMSK0 = (1<<OCIE0A); // enable OC1A interrupt
 
 // set pin modes for LED/7seg/display/whateveroutputischoosen
 DDRC &=~(1<<PORTC2); // PORTC2 input for radio RX (Moved from PORTD for LCD on PORTD)
-DDRC |= (1<<PORTC3); // Debug LED == LCD backlite
+DDRC |= (1<<PORTC3)|(1<<PORTC4); // Debug LED portc3 == LCD backlite. PORTC4 = debug.
 PORTC |= (1<<PORTC2); // PORTC2 pullup
 PORTC |= (1<<PORTC3); // turn backlite on
 
@@ -420,13 +420,20 @@ reenableuart(); /* LCD on same port as serial...*/
         case AANUIT: // untill MSG is in
             if(bitcnt==0){
             MSG=rec_buff;
-            rec_st = PROCESS;        
+            bitcnt=8;
+            rec_st = CRC;        
+            }
+        break;
+        case CRC: // untill CRC is in
+            if(bitcnt==0){
+            crc=rec_buff;
+            rec_st=PROCESS;
             }
         break;
         case PROCESS: // proces rec'd data
+            // TODO: actually check received CRC, instead of only just buffering it.
             updateDevice(ID,MSG);            
             rec_st=START; // and wait for sync again.
-       
         break;
         default:
         //err
@@ -479,7 +486,7 @@ tmp=(PINC&(1<<PINC2)); // because PINC is volatile but I only want to read it on
                     timestamp = timer;
                 }
                 else{ // downgoing edge
-                    if( (timer-timestamp >= 15) && (timer-timestamp <= 26) ){ // >= 750 us and <= 1.3 ms
+                    if( (timer-timestamp >= 15) && (timer-timestamp <= 26) ){ // >= 750 (15*50) us and <= 1.3 (26*50) ms
                          timestamp = timer; // save new timestamp
                          bit_st = WAITFORSTARTL; // high period was within margins
                         // PINC=(1<<0); // to see if the edge on C0 alligns with the falling edge in the "middle" of the sync bit. (it does)
@@ -515,6 +522,7 @@ tmp=(PINC&(1<<PINC2)); // because PINC is volatile but I only want to read it on
                     }                
                     bitcnt--;             // and count them
                     timestamp = timer;
+                    PINC=(1<<4); // show what transition got caugt as valid bit
                  }
             }else{
                  rec_st = START;        // if edges are too far apart, wait for start bit 

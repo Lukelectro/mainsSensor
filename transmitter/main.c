@@ -12,7 +12,7 @@
 // NOTE: It will be real slow then, so limit bitclock for programming: avrdude -p t45 -c dragon_isp -t -B 50 (400 at 16Khz)
 // NOTE: Do NOT enable debugwire at this slow clock. It will make reprogramming impossible (debug won't work either so it bricks the chip, btdt)
 
-#define HALFBITTIME 200 // us, actual value slightly larger because normal instructions take time too and add to delay. (Actual half bit time is arround 300us)
+#define HALFBITTIME 200 // us, actual value slightly larger because normal instructions take time too and add to delay. (Actual half bit time is arround 300us when set to 200)
 
 
 #include <avr/io.h>
@@ -68,8 +68,7 @@ return manch;
 }
 
 
-void transmit(uint16_t tx){ 
-  
+void transmit(uint16_t tx){   
 uint8_t i=0;
   do{
      if(tx&0x8000) PORTB=(1<<PORTB1); else PORTB=0; // MSB first, then.
@@ -77,7 +76,6 @@ uint8_t i=0;
      tx=tx<<1;//MSB first	
      _delay_us(HALFBITTIME); // at 128 KHz clock delay is needed. At 16 KHz clock a negative delay would be nice... So a 128 KHz clock it is.
     }while(i<16);
-
 }
 
 void transmitHIframe(){
