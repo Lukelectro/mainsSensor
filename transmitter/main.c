@@ -9,10 +9,11 @@
 // TODO: Please note: do not forget to edit the makefile as well when changing MCU between attiny45 and attiny10 (in 2 places), and when using t45, set its fuses correctly.
 
 #define F_CPU 128000UL // 128 Khz internal osc. (t45 lfuse:E4, rest default. 0x64 for ckdiv8 16 kHz clock, 0x62 default 8/8=1Mhz. t10 clock can be changed at runtime, t45 clock can not be changed at runtime.)
-
-#define HALFBITTIME 200 // us, actual value slightly larger because normal instructions take time too and add to delay.
 // NOTE: It will be real slow then, so limit bitclock for programming: avrdude -p t45 -c dragon_isp -t -B 50 (400 at 16Khz)
 // NOTE: Do NOT enable debugwire at this slow clock. It will make reprogramming impossible (debug won't work either so it bricks the chip, btdt)
+
+#define HALFBITTIME 200 // us, actual value slightly larger because normal instructions take time too and add to delay. (Actual half bit time is arround 300us)
+
 
 #include <avr/io.h>
 #include <util/delay.h>
@@ -161,8 +162,8 @@ while(1){   // re-transmit HI message every half a minute / repeat untill powerd
     transmitHIframe();    
     _delay_ms(100);
     transmitHIframe();    // no longer using the 0xFF preamble, so can transmit the actual message more often, so will transmit the actual message more often    
-    //_delay_ms(30000); 
-    _delay_ms(5000); // or test with 5s...
+    _delay_ms(30000); 
+    //_delay_ms(5000); // or test with 5s...
     }
 }
 
