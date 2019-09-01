@@ -80,16 +80,16 @@ reenableuart(); /* LCD on same port as serial...*/
 
                 // for debug, print msg
                 //uart_puts("new rec: %X,%X,%X,%X \n",buffer[0][prevwhich],buffer[1][prevwhich],buffer[2][prevwhich],buffer[3][prevwhich]);
-/*                
+                
                 uart_puts("new rec: ");                 
                 char charbuff[7];
                 for(uint8_t i = 0; i<4; i++){
                 itoa(buffer[i][prevwhich],charbuff,16); //hex
-                uart_puts(buffer);
+                uart_puts(charbuff);
                 uart_puts(", ");
                 }
                 uart_puts("\n");                 
-*/  
+ 
               // uart_puts =!= printf            
                 // XXX
 
@@ -197,7 +197,7 @@ ISR(PCINT1_vect){
 static uint16_t timekeeper;
 static uint8_t bitptr=0;
 static bool firstedge = true;
-
+uint8_t adr;
 uint8_t tmp = (PINC&(1<<2)); // buffer PINC.2
 
 if(firstedge){ // ignore the first edge
@@ -206,14 +206,16 @@ if(firstedge){ // ignore the first edge
 }else if( TCNT1-timekeeper >  113) 
 { // if previous edge n*4us (Edges need to be at least 3/4 BITTIME apart, so 1.5*halfbittime, so about 450 us)
 // select if it was an upgoing or downgoing edge. Because previous level then is the bit value (Downgoing edge = 1, upgoing edge is 0)
+    adr=bitptr>>3; // to convert from bits to byte addresses, divide by 8. 
     if(tmp==0){ // If PINC.2 is 0 now, it was a downgoing edge, so a 1 
-       buffer[bitptr%8][which] |=1; 
+       buffer[adr][which] |=1; 
     } // if it wasn't a '1', it is a '0', no need to |= a '0'
-    buffer[bitptr%8][which] = buffer[bitptr%8][which]  << 1; // shift in the new '1' or '0' 
+    buffer[adr][which] = buffer[adr][which]  << 1; // shift in the new '1' or '0' 
     bitptr++;    
     timekeeper=TCNT1;
     PINC=(1<<4); // XXX debug
 } // if edge not far enough apart, just wait for the next one
+//TODO: if toooo far apart, restart / start waiting for start condition again.
 
 
 if(bitptr >= (8*4)){  // after a full 4 byte message:
