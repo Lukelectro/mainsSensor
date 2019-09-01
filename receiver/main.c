@@ -198,7 +198,6 @@ static uint16_t timekeeper;
 static uint8_t bitptr=0;
 static bool firstedge = true;
 uint8_t adr;
-uint8_t tmp = (PINC&(1<<2)); // buffer PINC.2
 
 if(firstedge){ // ignore the first edge
     timekeeper=TCNT1-113; // but not the next one // setup timer so it gets the next edge (faling edge on allways-1 start bit, all ID's start with a '1')
@@ -207,13 +206,13 @@ if(firstedge){ // ignore the first edge
 { // if previous edge n*4us (Edges need to be at least 3/4 BITTIME apart, so 1.5*halfbittime, so about 450 us)
 // select if it was an upgoing or downgoing edge. Because previous level then is the bit value (Downgoing edge = 1, upgoing edge is 0)
     adr=bitptr>>3; // to convert from bits to byte addresses, divide by 8. 
-    if(tmp==0){ // If PINC.2 is 0 now, it was a downgoing edge, so a 1 
+    if( (PINC&(1<<2))==0 ){ // If PINC.2 is 0 now, it was a downgoing edge, so a 1 
        buffer[adr][which] |=1; 
     } // if it wasn't a '1', it is a '0', no need to |= a '0'
     buffer[adr][which] = buffer[adr][which]  << 1; // shift in the new '1' or '0' 
     bitptr++;    
     timekeeper=TCNT1;
-    PINC=(1<<4); // XXX debug
+    PINC=(1<<4); // XXX debug (To see if it samples on the right edge. It does, but still receive wrong data, e.g: FCCE instead of FEE7...
 } // if edge not far enough apart, just wait for the next one
 //TODO: if toooo far apart, restart / start waiting for start condition again.
 
