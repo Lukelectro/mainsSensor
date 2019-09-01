@@ -24,7 +24,7 @@
 // uses crc8 with 0 as initial value and Polynomial: x^8 + x^2 + x + 1 (0xE0).
 
 
-uint16_t ID_16b = 0xFEE7;   // Input ID here (TODO: put it at a fixed address in flash and change the .hex just before programming).
+uint16_t ID_16b = 0xA42A;   // Input ID here (TODO: put it at a fixed address in flash and change the .hex just before programming).
 uint8_t HIcrc=0, BYEcrc=0;  // crc for hi-message and Bye-message, before conversion to manchester encoding
 uint16_t MHIcrc, MBYEcrc;   // crc's after conversion to manchester encoding
 uint16_t IDH, IDL; // manchester-encoded ID split in 16 bit units, so this is not done at transmit time but before.
@@ -68,7 +68,7 @@ return manch;
 }
 
 
-void transmit(uint16_t tx){   
+inline void transmit(uint16_t tx){   
 uint8_t i=0;
   do{
      if(tx&0x8000) PORTB=(1<<PORTB1); else PORTB=0; // MSB first, then.
