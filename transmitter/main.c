@@ -8,9 +8,11 @@
 #define t10
 // TODO: Please note: do not forget to edit the makefile as well when changing MCU between attiny45 and attiny10 (in 2 places), and when using t45, set its fuses correctly.
 
-#define F_CPU 128000UL // 128 Khz internal osc. (t45 lfuse:E4, rest default. 0x64 for ckdiv8 16 kHz clock, 0x62 default 8/8=1Mhz. t10 clock can be changed at runtime, t45 clock can not be changed at runtime.)
+//#define F_CPU 128000UL // 128 Khz internal osc. (t45 lfuse:E4, rest default. 0x64 for ckdiv8 16 kHz clock, 0x62 default 8/8=1Mhz. t10 clock can be changed at runtime, t45 clock can not be changed at runtime.)
 // NOTE: It will be real slow then, so limit bitclock for programming: avrdude -p t45 -c dragon_isp -t -B 50 (400 at 16Khz)
 // NOTE: Do NOT enable debugwire at this slow clock. It will make reprogramming impossible (debug won't work either so it bricks the chip, btdt)
+
+#define F_CPU 500000UL // experiment at 0.5 MHz internal clock so instruction timing is less of an issue (But power consumption might be)
 
 #define HALFBITTIME 200 // us, actual value slightly larger because normal instructions take time too and add to delay. (Actual half bit time is arround 300us when set to 200)
 
@@ -74,7 +76,7 @@ uint8_t i=0;
      if(tx&0x8000) PORTB=(1<<PORTB1); else PORTB=0; // MSB first, then.
      i++;    
      tx=tx<<1;//MSB first	
-     _delay_us(HALFBITTIME); // at 128 KHz clock delay is needed. At 16 KHz clock a negative delay would be nice... So a 128 KHz clock it is.
+     _delay_us(HALFBITTIME); // at 128 kHz clock delay is needed. At 16 kHz clock a negative delay would be nice... So at least 128 kHz clock it is.
     }while(i<16);
 }
 
@@ -102,7 +104,6 @@ _delay_us(HALFBITTIME*4);
 transmit(IDH); // MSB first
 transmit(IDL);
 transmit(0x5555); // Bye=0x00, in manchester 0b0101 0101 0101 0101 (0x5555) 
-//transmit(0xAAAA); // because transmitHIframe works and transmitBYEframe doesn't, let's see what happens if there is no difference
 transmit(MBYEcrc);
 PORTB=0; // always end with the pin LOW
 }
@@ -122,9 +123,12 @@ GIMSK = (1<<6); // enable INT0
 #ifdef t10
 PRR = 0x03;// disable powerhungry peripherals
 CCP = 0xD8; // signature for changing protected registers such as CLKMSR
-CLKMSR = 0x01; // select 128Khz internal oscilator as main clock. Default prescaler is 8, so 16 Khz main clock.
+//CLKMSR = 0x01; // select 128 KHz internal oscilator as main clock. Default prescaler is 8, so 16 Khz main clock.
+CLKMSR = 0x00; // internal 8 MHz clock. (is default, so mostly for clarity or to override fuse settings)
 CCP = 0xD8; // signature for changing protected registers such as CLKMSR
-CLKPSR = 0x00; // set prescaler to 1, so 128 kHz main clock.
+//CLKPSR = 0x00; // set prescaler to 1, so 128 kHz main clock.
+CLKPSR = 0x04;   // set prescaler to 16, so 8/16=0.5 MHz main clock 
+
 //EICRA=0x00; //0x00 is the default and means "low level on PB2 triggers INT0"
 EIMSK = 0x01; // enable INT0
 #endif
