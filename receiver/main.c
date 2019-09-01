@@ -199,11 +199,15 @@ static uint8_t bitptr=0;
 static bool firstedge = true;
 uint8_t adr;
 
+#define EDGESEP 105 // edge seperation, * 4us. 
+// if previous edge n*4us (Edges need to be at least 3/4 BITTIME apart) (Minimum just above Halfbittime, maximum BITTIME, halfbittime arround 275us)
+// so minum just above 280us = 70 , maximum 140. 113 seems to allmost work (Works for FEE7, not for A42A);
+// if this is not enough margin, it might be a TX side problem...
+
 if(firstedge){ // ignore the first edge
-    timekeeper=TCNT1-113; // but not the next one // setup timer so it gets the next edge (faling edge on allways-1 start bit, all ID's start with a '1')
+    timekeeper=TCNT1-EDGESEP; // but not the next one // setup timer so it gets the next edge (faling edge on allways-1 start bit, all ID's start with a '1')
     firstedge=false;
-}else if( TCNT1-timekeeper >  113) 
-{ // if previous edge n*4us (Edges need to be at least 3/4 BITTIME apart, so 1.5*halfbittime, so about 450 us)
+}else if( TCNT1-timekeeper >  EDGESEP){ 
 // select if it was an upgoing or downgoing edge. Because previous level then is the bit value (Downgoing edge = 1, upgoing edge is 0)
     adr=bitptr>>3; // to convert from bits to byte addresses, divide by 8. 
     buffer[adr][which] = buffer[adr][which]  << 1; // first shift in a '0', then set it to a '1' if needed. Shift first, as to not shift out the MSB.    
