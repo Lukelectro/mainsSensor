@@ -19,9 +19,9 @@ void storedevnames(void){ // store devnames in EEPROM (on modification) (NOTE: E
 
 char* IDtoName(uint16_t ID){
     for(int i=0;i<numdevs;i++){
-        if(devnames[i].ID==ID) return &devnames[i].name[0];
+        if( (devnames[i].ID==ID) && (devnames[i].name[0] != 0) && (devnames[i].name[0] != 255) ) return &devnames[i].name[0]; // only return (pointers to) valid names.
     }
-    return NULL;
+    return NULL; // otherwise, return NULL pointer
 }
 
 
