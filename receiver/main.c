@@ -199,7 +199,7 @@ static uint8_t bitptr=0;
 static bool firstedge = true;
 uint8_t adr;
 
-#define EDGESEP 105 // edge seperation, * 4us. 
+#define EDGESEP 420 // edge seperation, * 4us. 
 // if previous edge n*4us (Edges need to be at least 3/4 BITTIME apart) (Minimum just above Halfbittime, maximum BITTIME, halfbittime arround 275us)
 // so minum just above 280us = 70 , maximum 140. 113 seems to allmost work (Works for FEE7, not for A42A);
 // if this is not enough margin, it might be a TX side problem...

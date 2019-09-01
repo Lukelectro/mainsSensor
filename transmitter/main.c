@@ -12,7 +12,7 @@
 // NOTE: It will be real slow then, so limit bitclock for programming: avrdude -p t45 -c dragon_isp -t -B 50 (400 at 16Khz)
 // NOTE: Do NOT enable debugwire at this slow clock. It will make reprogramming impossible (debug won't work either so it bricks the chip, btdt)
 
-#define HALFBITTIME 200 // us, actual value slightly larger because normal instructions take time too and add to delay. (Actual half bit time is arround 300us when set to 200)
+#define HALFBITTIME 600 // us, actual value slightly larger because normal instructions take time too and add to delay. (Actual half bit time is arround 300us when set to 200)
 
 
 #include <avr/io.h>
