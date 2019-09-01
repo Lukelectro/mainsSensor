@@ -3,352 +3,26 @@
 // TODO: split in a couple usefull .h's and a clearer main
 // TODO: ID->name mapping and a way to set these names over serial and a display to show the names on for devices still ON and an LED that's lit when there is still a nonzero amount of devices still ON.
 
-#define F_CPU 16000000 // 16 Mhz. 
-//(extern crystal, lfuse 0xF7, hfuse 0xD9 (0x99 to enable debugwire), Efuse 0xFD)
-#define numdevs 32     // number of devices to keep an eye on
-
-/* If defined, also records new devices if their messages are garbled or OFF, 
- * otherwise only record new devices that are ON, so OFF messages only get accepted from devices that where ON previously and garbled messages get ignored 
- */
-#define LOG_ALL 
-
-
-#include <stdlib.h>
+#include "main.h"
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
 #include <string.h>
-#include <avr/eeprom.h>
 #include "./uartlibrary/uart.h"
-#include "lcd.h"
-#define UART_BAUD_RATE 115200
-#define reenableuart() uart_init(UART_BAUD_SELECT(UART_BAUD_RATE,F_CPU))
-
-enum status {NOTINUSE=0, ON, ON_1st, OFF, PRESUMED_OFF, GARBLE}; 
-/* 
-ON_1st: received first "ON" message from ID.
-ON: received 2nd "ON" message from ID, within (PRESUMED_OFF waiting period) 2 minutes. (To filter noise seen as ID's) 
-OFF: Received OFF message from ID. 
-PRESUMED_OFF: Received no message from ID for 2 minutes.
-GARBLE: MSG different from On or OFF.
-NOTINUSE: this device-status storage spot is not in use. This is 0 so this is the default
-*/
-
-typedef struct{
-uint16_t ID;
-enum status state;
-uint16_t lastseen; // timestamp for "MISSEDMSG"/"PRESUMED_OFF".
-//str name[]? Of gewoon een bende led's op een frontpaneel en daar plakkertjes naast?
-}device;
-
-typedef struct{
-uint16_t ID;
-char name[16]; // name, max 16 characters 
-}DNS; // Device Name Something
-
+#include "proces.h"
+#include "show.h"
 
 device devices[numdevs]; // keep status on all possible ID's.
 DNS devnames[numdevs];   // keep all the name / ID couplings here.
-
 uint16_t now=0;
 uint8_t numOn;
-volatile uint8_t rec_buff;
-volatile int8_t bitcnt;
+volatile uint8_t buffer[4][2]; // new receive buffer for the entire message (16 bit ID + 8 bit message + 8 bit CRC = 4 bytes), 2 buffers: one being filled, other read
+volatile uint8_t which=0; // which buffer is in use for reception and which one for readout? (0,1 - which indicates which one is in use for reception, readout should use the other)
+uint8_t prevwhich; // for use by readout (If which has changed, new message can be read. From buffer[..][prevwhich];
+
 volatile enum bit_state {WAITFORSTARTH, WAITFORSTARTL, OTHERBITS} bit_st=WAITFORSTARTH;
-volatile enum rec_state {START,WAITFORSYNC,IDH,IDL,AANUIT, CRC ,PROCESS} rec_st = START;
+volatile enum rec_state {START,WAITFORSYNC, WAITFORMSG ,PROCESS} rec_st = START;
 
-void readdevnames(){ // read devnames from EEPROM (on bootup)
-    uint8_t size = sizeof(devnames[0]); // they are all the same size (18 bytes, but still use sizeoff in case it changes)    
-    for(unsigned int i = 0;i<numdevs;i++){
-        eeprom_read_block(&devnames[i], i*size ,size); // TODO: test this!
-    }
-}
-
-void storedevnames(){ // store devnames in EEPROM (on modification) (NOTE: EEPROM on ATMEGA328p is 1024 bytes) 
-// use EEPROM update, so when data is the same, nothing gets rewritten (saves wear);
-    uint8_t size = sizeof(devnames[0]); // they are all the same size (18 bytes, but still use sizeoff in case it changes)    
-    for(unsigned int i = 0;i<numdevs;i++){
-        eeprom_update_block(&devnames[i], i*size ,size); // TODO: test this!
-    }
-}
-
-char* IDtoName(uint16_t ID){
-    for(int i=0;i<numdevs;i++){
-        if(devnames[i].ID==ID) return &devnames[i].name[0];
-    }
-    return NULL;
-}
-
-// TODO: serial input of new device names for each ID? setname 0x8234 slartibartfast 
-// TODO: add a way to erase ID/name combo's with unused or no longer used ID's (or wrongly entered)
-// maybe just set unused names to " ", and make it re-use those spots for new ID/name combinations?
-void readnewname(DNS* names){
-    unsigned int data_in;
-    static char input[32]; // setname 0x1234 a16charalongname+0    
-    static uint8_t i = 0;
-    unsigned long IDL = 0; // long ID, for strtoul 
-    uint16_t newID;
-    char newname[16], buff, buffer[7];   
-    char* startofname;
-    bool exists = false;
-
-    /* per time this function gets called, one character gets read form buffer, so call periodically */
-
-    data_in = uart_getc(); // read a character
-    if( 0==(data_in & 0xFF00)){ // higher byte is status, 0 is good
-        buff = data_in & 0x00FF; // lower byte is data
-        input[i] = buff;        
-        uart_putc(buff); // echo what's input        
-        if(i<31) i++;
-    }     
-    
-    if((i==31) || (13==buff) ){ // On 32 characters input, or CR (use buff because i++) (If you want to add LF: || (10==buff))
-        if(i==31) input[i]=NULL; else input[i-1]=NULL; // correctly terminate string for further processing        
-        i=0;
-        buff = 0; // so it does not keep looping this
-        if(0==strncmp(input,"setname",7)){ // if correctly formed command (use strncmp or strstr?)
-            IDL = strtoul((void*)(input+7),NULL,0); // begin 7 leters into input string, so skip the "setname" and start at the ID ( hex as 0x... or decimal)        
-        }
-        else
-        {
-         uart_puts_P("\nIncorrect command. Try setname [ID] [name (max 16)]\n");
-        }
-        if(IDL!=0){ // if indeed an ID is input
-            newID = IDL; // copy ID, for later search
-            
-            // display ID and name just set.
-            
-            itoa(IDL,buffer,16); //convert ID to hex-formeted text for later display
-            startofname = strrchr(input,' ') + 1; // name starts after last ' '.
-            if( (startofname-input+1) >= 16 ){// prevent name longer than sizeof(newname), 
-            // because input is 32 chars so if it starts at or after position 16 it is short enough
-            // though that ruins the posibility of decimal input for ID's... Those are given in .hex anyway so not a problem            
-                strcpy(newname,startofname); 
-            }
-            else
-            {
-                uart_puts_P("\nError: new name is too long or ID too short \n"); // if new name is longer then sizeof(newname)
-                strcpy(newname,"too long");                          // set it to something shorter. 
-            }
-            uart_puts_P("\nName set: ");            
-            uart_puts(buffer);            
-            uart_puts_P(", ");
-            uart_puts(newname);
-            uart_puts_P("\n");                      
-
-            // the store-in-eeprom part.
-            // for i in names find the unused/255 one and put this ID/name combo in, then update EEPROM 
-        
-            exists=false;
-            for(int i=0;i<numdevs;i++){
-                if(devnames[i].ID == newID){ // If this ID allready has a name, change its name
-                    strcpy(devnames[i].name,newname);
-                    exists = true;
-                    break;
-                }
-            }
-            if(exists == false){ //if ID is not found
-                for(int i=0;i<numdevs;i++){
-                    if((devnames[i].name[0]==255)||(devnames[i].name[0]==' ')||(devnames[i].name[0]=='\n')){ 
-                    // names that start with 255 (empty EEPROM), " " or newline are empty spots
-                    devnames[i].ID=newID;
-                    strcpy(devnames[i].name,newname); 
-                    break; // don't fill the entire EEPROM with 1 ID/name combo!!
-                    }
-                }
-            }          
-            storedevnames(); //update_EEPROM (only writes data if it is indeed changed)
-        }
-        else
-        {
-         uart_puts_P("\nIncorrect data. Try setname [ID] [name (max 16)]\n");
-        }
-    }
-}
-
-void updateDevice(uint16_t ID, uint8_t MSG){
-// find device in array and update it, and if it's not there, add it.
-unsigned int pntr;
-uint8_t processed=0; // is this device allready updated?  
-
-/* first check if this device ID is seen before allready. if it is, update its status (and set processed to 1)*/ 
-    for(pntr=0;pntr<numdevs;pntr++){
-        if(ID==devices[pntr].ID){
-            devices[pntr].lastseen = now;
-            if(0xFF==MSG) devices[pntr].state=ON; else if(0x00==MSG) devices[pntr].state=OFF;
-            processed=1;
-            break;
-	    }
-    }
-
-/* if it is a device not seen before (processed == 0), then add it */
-    enum status trytofill = NOTINUSE; /* first try to use a unused spot, if that fails, try to use "garble", "off" or "presumed_off", in that order */
-    
-    while(0==processed){ 
-        for(pntr=0;pntr<numdevs;pntr++){
-            if( devices[pntr].state==trytofill ){ // If all out of "unused", re-use "garble", "off" or "presumed_off".
-                devices[pntr].lastseen = now;
-                #ifdef LOG_ALL
-                switch (MSG){
-                    case 0xFF: 
-                    devices[pntr].state=ON_1st; // only show as "ON" if it is seen at least twice
-                    numOn++;
-                    break;  
-                    case 0x00:
-                    devices[pntr].state=OFF; // if the new device is OFF, do not increase or decrease numOn (new devices being OFF is... strange)
-                    break;
-                    default:
-                    devices[pntr].state=GARBLE; // if the new device MSG is not ON or OFF (Most likely transmission noise or receiver bug)
-                    break;                    
-                    }
-                 devices[pntr].ID=ID;               
-                 #else
-                 if (0xFF==MSG){ // only if the new device is ON, add it:
-                    devices[pntr].state=ON_1st; // only show as "ON" if it is seen at least twice (If it is not allready in the list)
-                    numOn++;
-                    devices[pntr].ID=ID;               
-                 }   
-                #endif
-                processed = 1;
-                break; // add new devices just once!
-            }        
-        }
-        switch(trytofill){
-        case NOTINUSE:
-        trytofill = GARBLE;
-        break;
-        case GARBLE:
-        trytofill = OFF;
-        break;
-        case OFF:
-        trytofill = PRESUMED_OFF;
-        break;
-        default:
-        // ran out of spots
-        uart_putc('\n');
-        uart_puts_P("Cannot store new device, ran out of storage space");        
-        uart_putc('\n');
-        processed = 1; // otherwise it would hang here.
-        break;        
-        }
-    }
-
-
-}
-
-// Display number of devices still on (either on a LED if numon>0, or on 7segment displays, or on a LCD)
-// Display device ID's still on.
-// TODO: Maybe even display device names for those ID's, but that would require a lookup table. That would need te be editable or known at compile time. Both difficult.
-void LCD_refresh(void){
-char buffer[7];
-uint8_t num;
-//static unsigned int whichnameareweat = 0; // Maybe later scroll the names
-
-_delay_ms(10); // so it can finish serial transmission
-uart_release();// lcd/uart share pins
-lcd_cls();     // clear lcd so devices that are now OFF are not still displayed
-
-// turn backlite on if there is still devices ON, and off otherwise.
-// also, display names of devices still ON if there are devices still ON, otherwise display a message saying all is OFF.
-    if(numOn>0){ 
-        
-        PORTC |= (1<<PORTC3); 
-        itoa(numOn,buffer,10);
-        lcd_puts(buffer);
-        if(numOn==1) lcd_puts(" ding nog aan"); else lcd_puts(" dingen nog aan");
-        lcd_goto(1,0);
-// Display NAMES of devices still on:
-        num = 1;
-        for(unsigned int i =0;i<numdevs;i++){
-            if(devices[i].state==ON){
-                char* name = IDtoName(devices[i].ID);
-                if(name!=NULL){ 
-                    lcd_puts(name);
-                    num++;
-                }
-                lcd_goto(num,0);
-                if(num>3) break; // can display at maximum 3 names...
-            }
-        }
-    }
-    else{
-        PORTC &= ~(1<<PORTC3);  // Backlite OFF
-        lcd_puts("Alles met een sensor");
-        lcd_goto(1,0);
-        lcd_puts("is uit");
-    }
-    reenableuart();
-}
-
-void SerialRefresh(void){
-// Transmit over serial: numon (number of devices still ON) and ID of all devices still on / OFF/Presumed off.
-
-char buffer[7];
-unsigned int count=0;
-
-uart_puts_P("NumOn: ");
-itoa(numOn,buffer,10);
-uart_puts(buffer);
-uart_putc('\n');
-uart_puts_P("ID's still ON:");
-    for(unsigned int pntr=0;pntr<numdevs;pntr++){
-        if(devices[pntr].state==ON){
-            itoa(devices[pntr].ID,buffer,16); //hex
-            uart_puts(buffer);
-            uart_puts_P(",");
-            count++;      
-            }
-    }
-    if(count) uart_putc('\n'); else uart_puts_P("NONE \n");
-count = 0;
-uart_puts_P("ID's not seen a while, presumed OFF:");
-    for(unsigned int pntr=0;pntr<numdevs;pntr++){
-        if(devices[pntr].state==PRESUMED_OFF){
-            itoa(devices[pntr].ID,buffer,16); //hex
-            uart_puts(buffer);
-            uart_puts_P(","); 
-            count++;        
-            }
-    }
-    if(count) uart_putc('\n'); else uart_puts_P("NONE \n");
-count = 0;
-uart_puts_P("ID's that sent goodbye's, known OFF:");
-    for(unsigned int pntr=0;pntr<numdevs;pntr++){
-        if(devices[pntr].state==OFF){
-            itoa(devices[pntr].ID,buffer,16); //hex
-            uart_puts(buffer);
-            uart_puts_P(",");      
-            count++;                
-            }
-        }
-    if(count) uart_putc('\n'); else uart_puts_P("NONE \n");
-
-#ifdef LOG_ALL /* only print if indeed logged */
-count = 0;
-uart_puts_P("ID's that sent garbled MSG's:"); 
-    for(unsigned int pntr=0;pntr<numdevs;pntr++){
-        if(devices[pntr].state==GARBLE){
-            itoa(devices[pntr].ID,buffer,16); //hex
-            uart_puts(buffer);
-            uart_puts_P(",");      
-            count++;                
-            }
-        }
-    if(count) uart_putc('\n'); else uart_puts_P("NONE \n");
-/* when logging all/showing all, also show ON_1st*/
-count = 0;
-uart_puts_P("ID's that so far only sent 1 ON msg (ON_1st):"); 
-    for(unsigned int pntr=0;pntr<numdevs;pntr++){
-        if(devices[pntr].state==ON_1st){
-            itoa(devices[pntr].ID,buffer,16); //hex
-            uart_puts(buffer);
-            uart_puts_P(",");      
-            count++;                
-            }
-        }
-    if(count) uart_putc('\n'); else uart_puts_P("NONE \n");
-#endif
-}
 
 
 int main(void){
@@ -362,8 +36,9 @@ uart_init( UART_BAUD_SELECT(UART_BAUD_RATE,F_CPU) );
 sei();             // enable global interrupts (For timer, and uart.h)
 
 TCCR0A = 1<<WGM01; // CTC mode
-TCCR0B = 1<<CS01;  // clkIO/8 (16Mhz/8=2MHz)
-OCR0A = 100;       // 16MHz/8/100= 20kHz --- 50 us
+TCCR0B = (1<<CS01) | (1<<CS00); // clkIO/64= 16/64 = 1/4 MHz 250 KHz (4 us per tick)
+OCR0A = 25;       // 16MHz/64/25= 10kHz --- 100 us
+
 TIMSK0 = (1<<OCIE0A); // enable OC1A interrupt
 
 // set pin modes for LED/7seg/display/whateveroutputischoosen
@@ -379,15 +54,15 @@ uart_release();/* LCD on same port as serial...*/
 lcd_init();
 lcd_cursor(false,false);
 lcd_goto(0,0);
-lcd_puts("Hallo Wereld! 1");
+lcd_puts("Hallo Wereld! l1");
 lcd_goto(1,0);
-lcd_puts("Hallo Wereld! 2");
+lcd_puts("line 2");
 //lcd_goto(0,20); //actually 3,0, but 4x20 display is implemented as 2x40... So modified LCD.C instead
 lcd_goto(2,0);
-lcd_puts("Hallo Wereld! 3");
+lcd_puts("line 3");
 //lcd_goto(1,20); //actually 4,0, but 4x20 display is implemented as 2x40...
 lcd_goto(3,0);
-lcd_puts("Hallo Wereld! 4");
+lcd_puts("line 4");
 _delay_ms(1000);
 reenableuart(); /* LCD on same port as serial...*/
 
@@ -395,43 +70,28 @@ reenableuart(); /* LCD on same port as serial...*/
    
     switch(rec_st){
         case START:
+             prevwhich=which;
              bit_st = WAITFORSTARTH;
-             bitcnt = 8;
-             rec_st = IDH;
+             rec_st = WAITFORMSG; 
         break;
-        case WAITFORSYNC:
-            // do not reset bit_st while waiting for start bit!
-        break;
-        case IDH: // wait untill IDH is in
-            if(bitcnt==0){
-            ID=rec_buff;
-            ID=ID<<8;
-            bitcnt=8;
-            rec_st=IDL;
-            }
-        break;
-        case IDL: // untill IDL is in
-            if(bitcnt==0){
-            ID|=rec_buff;
-            bitcnt=8;
-            rec_st=AANUIT;
-            }
-        break;
-        case AANUIT: // untill MSG is in
-            if(bitcnt==0){
-            MSG=rec_buff;
-            bitcnt=8;
-            rec_st = CRC;        
-            }
-        break;
-        case CRC: // untill CRC is in
-            if(bitcnt==0){
-            crc=rec_buff;
-            rec_st=PROCESS;
-            }
+        case WAITFORMSG:
+            if(which!=prevwhich){ // if message is in, copy it into its seperate fields
+
+                // for debug, print msg
+                //uart_puts("new rec: %X,%X,%X,%X \n",buffer[0][prevwhich],buffer[1][prevwhich],buffer[2][prevwhich],buffer[3][prevwhich]);
+                // uart_puts =!= printf, so that would be a bit more involved. So lets first try if it magically works before figuring out how to debug it                
+                // XXX
+
+                ID = ((buffer[0][prevwhich])<<8) | buffer[1][prevwhich] ;
+                MSG = buffer[2][prevwhich];
+                crc = buffer[3][prevwhich];
+                
+                rec_st = PROCESS;
+            }        
+
         break;
         case PROCESS: // proces rec'd data
-            // TODO: actually check received CRC, instead of only just buffering it.
+            // TODO: actually check received CRC, instead of only just buffering it. (if(crcgood){ updatedevice else nothing} retry)
             updateDevice(ID,MSG);            
             rec_st=START; // and wait for sync again.
         break;
@@ -465,74 +125,85 @@ ISR(BADISR_vect)
     // just reset, but have this here so I could in theory add a handler
 }
 
-ISR(TIMER0_COMPA_vect){ // 16E6/8/100 = 20 kHz (50 us, for receiver timing.)
+ISR(TIMER0_COMPA_vect){ // 16E6/64/25 = 10 kHz (100 us, for receiver timing.)
 static uint8_t prescale = 0, prev = 0, tmp; 
 static uint16_t timer, timestamp; // it should also work with 8 bit timestamps (timer-timestamp >= n should be overflow safe), but it does not.
 
-    if(prescale>=200){
-    now++; // 20 kHz / 200 = 100 Hz
+    if(prescale>=100){
+    now++; // 10 kHz / 100 = 100 Hz
     prescale = 0;
     }
 prescale++;
-timer++; // use seperate variable that does not reset at 200 but overflows like expected.
+timer++; // use seperate variable that does not reset at 100 but overflows like expected.
 tmp=(PINC&(1<<PINC2)); // because PINC is volatile but I only want to read it once to prevent race conditions
 
     if(prev!=tmp){ // detect edges
         prev=tmp;
-        if(bitcnt>0){ // only receive bits if previous data has been read.
-            switch (bit_st){
-            case WAITFORSTARTH:
-                if(tmp){ // upgoing edge
-                    timestamp = timer;
-                }
-                else{ // downgoing edge
-                    if( (timer-timestamp >= 15) && (timer-timestamp <= 26) ){ // >= 750 (15*50) us and <= 1.3 (26*50) ms
-                         timestamp = timer; // save new timestamp
-                         bit_st = WAITFORSTARTL; // high period was within margins
-                        // PINC=(1<<0); // to see if the edge on C0 alligns with the falling edge in the "middle" of the sync bit. (it does)
-                    } // else, if not whitin margins, well... retry
-                }
-            break;
-            case WAITFORSTARTL:
-                if(tmp){ // upgoing edge
-                  if( (timer-timestamp >= 15) && (timer-timestamp <= 26) ){ // >= 750 us and <= 1.3 ms
-                      timestamp = (timer-9); // save new timestamp minus an offset to make sure next edge gets seen as late enough
-                      bit_st=OTHERBITS; // low period was within margins
-                  } 
-                  else{ // else, if not whitin margins, well... retry
-                     timestamp=timer;
-                     bit_st = WAITFORSTARTH;
-                  }
-                }
-                else{ // downgoing edge
-                // Should not happen, but still...
-                bit_st = WAITFORSTARTH;
-                }
-            
-            break;
-            case OTHERBITS:
-                // TODO: figure out how to make this work with both 0 or 1 as first bit after the allways-low end of the sync bit.
-                // first OTHERBITS edge will allways be rising edge because end of syncbit is allways 0. But first OTHERBIT might be either 1 or 0. How to distinguish?
-                // Or, for now, a simpler aproach would be to make the first ID bit always a 1. Still leaves 2^15 possible ID's (32768 possibilities )
-            if((timer-timestamp)<=25){      // at most 17 ticks = 850us appart (Otherwise, restart)
-                if((timer-timestamp)>=10){ //  at least 10*50 = 500 us appart (half a bittime is about 200+ us) (Otherwise, wait longer and continue)
-                    rec_buff=rec_buff<<1; // shift in the (previous) bits before adding a new one (or a new zero)                
-                    if(!tmp){
-                        rec_buff|=1; // if PINC2 is low now, it was a high-to-low transition, so a 1.
-                    }                
-                    bitcnt--;             // and count them
-                    timestamp = timer;
-                    PINC=(1<<4); // show what transition got caugt as valid bit
-                 }
-            }else{
-                 rec_st = START;        // if edges are too far apart, wait for start bit 
+   
+        switch (bit_st){
+        case WAITFORSTARTH:
+            if(tmp){ // upgoing edge
+                timestamp = timer;
             }
-            break;
-            default:
-            bit_st=WAITFORSTARTH; 
+            else{ // downgoing edge
+                if( (timer-timestamp >= 8) && (timer-timestamp <= 13) ){ // >= 800 us and <= 1.3 ms
+                     timestamp = timer; // save new timestamp
+                     bit_st = WAITFORSTARTL; // high period was within margins
+                    // PINC=(1<<0); // to see if the edge on C0 alligns with the falling edge in the "middle" of the sync bit. (it does)
+                } // else, if not whitin margins, well... retry
             }
+        break;
+        case WAITFORSTARTL:
+            if(tmp){ // upgoing edge
+              if( (timer-timestamp >= 8) && (timer-timestamp <= 13) ){ // >= 800 us and <= 1.3 ms
+                  bit_st=OTHERBITS;   // low period was within margins
+                  PCMSK1 = (1<<2);     // setup PIN change interrupt 1 to include only PORTC.2
+                  PCICR = (1<<PCIE1); // enable PIN change interrupt 1
+              } 
+              else{ // else, if not whitin margins, well... retry
+                 timestamp=timer;
+                 bit_st = WAITFORSTARTH;
+              }
+            }
+            else{ // downgoing edge
+            // Should not happen, but still...
+            bit_st = WAITFORSTARTH;
+            }
+        
+        break;
+        case OTHERBITS:
+
+        break;
+        default:
+        bit_st=WAITFORSTARTH; 
         }
     }
 }
 
+ISR(PCINT1_vect){
+// Pin Change Interrupt10 is PORTC2 (RX)
+// plan is as follows / TODO:
+// after detection of start condition, use edge detection interrupt (to find edges, duh) and the value of timer2 to determine if these edges are far enough appart to be valid. After decoding a full message worth of bits, disable pin change interrupt and process message / refresh display. After that, start watching for start condition again.
+static uint8_t timekeeper;
+static uint8_t bitptr=0;
 
+uint8_t tmp = (PINC&(1<<2)); // buffer PINC.2
+
+if( TCNT0-timekeeper >  113) { // if previous edge 123*4us (Edges need to be at least 3/4 BITTIME apart, so 1.5*halfbittime, so about 450 us)
+// select if it was an upgoing or downgoing edge. Because previous level then is the bit value (Downgoing edge = 1, upgoing edge is 0)
+    if(tmp==0){ // If PINC.2 is 0 now, it was a downgoing edge, so a 1 
+       buffer[bitptr%8][which] |=1; 
+    } // if it wasn't a '1', it is a '0', no need to |= a '0'
+    buffer[bitptr%8][which] = buffer[bitptr%8][which]  << 1; // shift in the new '1' or '0' 
+    bitptr++;    
+timekeeper=TCNT0;
+} // if edge not far enough apart, just wait for the next one
+
+
+if(bitptr > (8*4)){  // after a full 4 byte message:
+    PCICR &= ~(1<<PCIE1); // disable PIN change interrupt 1,
+    bitptr = 0;      // reset bitcount,
+    if(which==1) which = 0; else which=1; // select which buffer to use next time.
+}
+
+}
