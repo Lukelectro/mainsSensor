@@ -39,6 +39,8 @@ TCCR0A = 1<<WGM01; // CTC mode
 TCCR0B = (1<<CS01) | (1<<CS00); // clkIO/64= 16/64 = 1/4 MHz 250 KHz (4 us per tick)
 OCR0A = 25;       // 16MHz/64/25= 10kHz --- 100 us
 
+TCCR1B = (1<<CS01) | (1<<CS00); // clkIO/64= 16/64 = 1/4 MHz 250 KHz (4 us per tick) (Because Timer0 clears at ACR0A and a large range is needed for timing pulse validity, use timer 1)
+
 TIMSK0 = (1<<OCIE0A); // enable OC1A interrupt
 
 // set pin modes for LED/7seg/display/whateveroutputischoosen
@@ -70,7 +72,6 @@ reenableuart(); /* LCD on same port as serial...*/
    
     switch(rec_st){
         case START:
-             prevwhich=which;
              bit_st = WAITFORSTARTH;
              rec_st = WAITFORMSG; 
         break;
@@ -79,13 +80,23 @@ reenableuart(); /* LCD on same port as serial...*/
 
                 // for debug, print msg
                 //uart_puts("new rec: %X,%X,%X,%X \n",buffer[0][prevwhich],buffer[1][prevwhich],buffer[2][prevwhich],buffer[3][prevwhich]);
-                // uart_puts =!= printf, so that would be a bit more involved. So lets first try if it magically works before figuring out how to debug it                
+/*                
+                uart_puts("new rec: ");                 
+                char charbuff[7];
+                for(uint8_t i = 0; i<4; i++){
+                itoa(buffer[i][prevwhich],charbuff,16); //hex
+                uart_puts(buffer);
+                uart_puts(", ");
+                }
+                uart_puts("\n");                 
+*/  
+              // uart_puts =!= printf            
                 // XXX
 
                 ID = ((buffer[0][prevwhich])<<8) | buffer[1][prevwhich] ;
                 MSG = buffer[2][prevwhich];
                 crc = buffer[3][prevwhich];
-                
+                prevwhich=which;
                 rec_st = PROCESS;
             }        
 
@@ -149,7 +160,6 @@ tmp=(PINC&(1<<PINC2)); // because PINC is volatile but I only want to read it on
                 if( (timer-timestamp >= 8) && (timer-timestamp <= 13) ){ // >= 800 us and <= 1.3 ms
                      timestamp = timer; // save new timestamp
                      bit_st = WAITFORSTARTL; // high period was within margins
-                    // PINC=(1<<0); // to see if the edge on C0 alligns with the falling edge in the "middle" of the sync bit. (it does)
                 } // else, if not whitin margins, well... retry
             }
         break;
@@ -184,26 +194,34 @@ ISR(PCINT1_vect){
 // Pin Change Interrupt10 is PORTC2 (RX)
 // plan is as follows / TODO:
 // after detection of start condition, use edge detection interrupt (to find edges, duh) and the value of timer2 to determine if these edges are far enough appart to be valid. After decoding a full message worth of bits, disable pin change interrupt and process message / refresh display. After that, start watching for start condition again.
-static uint8_t timekeeper;
+static uint16_t timekeeper;
 static uint8_t bitptr=0;
+static bool firstedge = true;
 
 uint8_t tmp = (PINC&(1<<2)); // buffer PINC.2
 
-if( TCNT0-timekeeper >  113) { // if previous edge 123*4us (Edges need to be at least 3/4 BITTIME apart, so 1.5*halfbittime, so about 450 us)
+if(firstedge){ // ignore the first edge
+    timekeeper=TCNT1-113; // but not the next one // setup timer so it gets the next edge (faling edge on allways-1 start bit, all ID's start with a '1')
+    firstedge=false;
+}else if( TCNT1-timekeeper >  113) 
+{ // if previous edge n*4us (Edges need to be at least 3/4 BITTIME apart, so 1.5*halfbittime, so about 450 us)
 // select if it was an upgoing or downgoing edge. Because previous level then is the bit value (Downgoing edge = 1, upgoing edge is 0)
     if(tmp==0){ // If PINC.2 is 0 now, it was a downgoing edge, so a 1 
        buffer[bitptr%8][which] |=1; 
     } // if it wasn't a '1', it is a '0', no need to |= a '0'
     buffer[bitptr%8][which] = buffer[bitptr%8][which]  << 1; // shift in the new '1' or '0' 
     bitptr++;    
-timekeeper=TCNT0;
+    timekeeper=TCNT1;
+    PINC=(1<<4); // XXX debug
 } // if edge not far enough apart, just wait for the next one
 
 
-if(bitptr > (8*4)){  // after a full 4 byte message:
+if(bitptr >= (8*4)){  // after a full 4 byte message:
     PCICR &= ~(1<<PCIE1); // disable PIN change interrupt 1,
     bitptr = 0;      // reset bitcount,
     if(which==1) which = 0; else which=1; // select which buffer to use next time.
+    firstedge = true; // reset first-edge detection
+    //PINC=(1<<4); // XXX debug
 }
 
 }
