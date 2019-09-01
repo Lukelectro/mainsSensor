@@ -24,15 +24,11 @@
 // uses crc8 with 0 as initial value and Polynomial: x^8 + x^2 + x + 1 (0xE0).
 
 
-uint16_t ID_16b = 0xA42A;   // Input ID here (TODO: put it at a fixed address in flash and change the .hex just before programming).
+uint16_t ID_16b = 0xFEE7;   // Input ID here (TODO: put it at a fixed address in flash and change the .hex just before programming).
 uint8_t HIcrc=0, BYEcrc=0;  // crc for hi-message and Bye-message, before conversion to manchester encoding
 uint16_t MHIcrc, MBYEcrc;   // crc's after conversion to manchester encoding
 uint16_t IDH, IDL; // manchester-encoded ID split in 16 bit units, so this is not done at transmit time but before.
 // no decisionmaking while transmitting, it affects timing too much at this slow clocrate. So have a HIframe and a byeframe ready beforehand. Including their CRC's, and with pre-split ID. 
-
-//TODO: test this idea, with a 32 bit HImsg / BYEmsg already precalculated. So 1 for loop for transmit, not 4 seperate ones. Though of course it still is a 8-bit architecture..
-uint64_t HImsg, BYEmsg; // TODO: initialise and transmit
-
 
 
 /*
@@ -71,17 +67,7 @@ uint16_t manch=0;
 return manch;
 }
 
-void transmit(uint64_t tx){   
-uint8_t i=0;
-  do{
-     if(tx&1<<63) PORTB=(1<<PORTB1); else PORTB=0; // MSB first, then.
-     i++;    
-     tx=tx<<1;//MSB first	
-     _delay_us(HALFBITTIME); // at 128 KHz clock delay is needed. At 16 KHz clock a negative delay would be nice... So a 128 KHz clock it is.
-    }while(i<64);
-}
 
-#ifdef oldtransmitmethod
 void transmit(uint16_t tx){   
 uint8_t i=0;
   do{
@@ -92,7 +78,7 @@ uint8_t i=0;
     }while(i<16);
 }
 
-void transmitHIframe(void){
+void transmitHIframe(){
 /* sync bit / start bit instead, with easy-to-detect timing (slower) */
 PORTB=(1<<PORTB1);
 _delay_us(HALFBITTIME*4);
@@ -106,7 +92,7 @@ transmit(MHIcrc);
 PORTB=0; // always end with the pin LOW
 }
 
-void transmitBYEframe(void){
+void transmitBYEframe(){
 /* sync bit / start bit instead, with easy-to-detect timing (slower) */
 PORTB=(1<<PORTB1);
 _delay_us(HALFBITTIME*4);
@@ -120,7 +106,7 @@ transmit(0x5555); // Bye=0x00, in manchester 0b0101 0101 0101 0101 (0x5555)
 transmit(MBYEcrc);
 PORTB=0; // always end with the pin LOW
 }
-#endif
+
 
 int main(void){
 DDRB|=(1<<PORTB1); // PORTB1 output
@@ -159,28 +145,21 @@ BYEcrc= _crc8_ccitt_update(BYEcrc,0x00);           // BYE-msg
 MHIcrc=tomanch_8(HIcrc);
 MBYEcrc=tomanch_8(BYEcrc);
 
-//pre-build entire dataframe, for more consistent transmit timings:
-HImsg=((IDL<<48) | (IDH << 32)| (0xAAAA << 16)| MHIcrc);
-BYEmsg=((IDL<<48) | (IDH << 32)| (0x5555 << 16)| MHIcrc);
 
 while((PINB&(1<<PINB2))==0); // wait untill bulk cap is charged
 _delay_ms(5000); // and slightly longer, because input flips before it is full enough.
 
 sei(); // Enable interupts after PB2 is high
 
-//transmitHIframe(); // transmit powerup message
-transmit(HImsg);
+transmitHIframe(); // transmit powerup message
 _delay_ms(5000);   // next one in 5 s.
-//transmitHIframe(); // transmit powerup message
-transmit(HImsg);
+transmitHIframe(); // transmit powerup message
 _delay_ms(5000);   // next one in 5 s.
 
 while(1){   // re-transmit HI message every half a minute / repeat untill powerdown.
-//   transmitHIframe();    
-     transmit(HImsg);
+    transmitHIframe();    
     _delay_ms(100);
-    //transmitHIframe();    // no longer using the 0xFF preamble, so can transmit the actual message more often, so will transmit the actual message more often    
-    transmit(HImsg);    
+    transmitHIframe();    // no longer using the 0xFF preamble, so can transmit the actual message more often, so will transmit the actual message more often    
     _delay_ms(30000); 
     //_delay_ms(5000); // or test with 5s...
     }
@@ -196,8 +175,7 @@ ISR(INT0_vect){ //note INT0 is on PB2
 
 // if PB2 is low, power failed / is going down, so transmit goodbye message on bulk capacitor charge
     do{
-        //transmitBYEframe();
-          transmit(BYEmsg); 
+        transmitBYEframe(); 
         _delay_ms(3); // give reciever a bit of time (to optionally proces an error and wait for syncbit again)
     }while((PINB&(1<<PINB2))==0); // until power goes out or returns.
 }
