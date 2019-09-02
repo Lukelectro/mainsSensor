@@ -68,7 +68,7 @@ return manch;
 }
 
 
-inline void transmit(uint16_t tx){   
+void transmit(uint16_t tx){   
 uint8_t i=0;
   do{
      if(tx&0x8000) PORTB=(1<<PORTB1); else PORTB=0; // MSB first, then.
@@ -79,6 +79,15 @@ uint8_t i=0;
 }
 
 void transmitHIframe(){
+
+transmit(0xAAAA); /* re-introduce pre-amble to see if that positively influences receiver timing somehow?*/
+transmit(0xAAAA);
+transmit(0xAAAA);
+transmit(0xAAAA);
+transmit(0xAAAA);
+transmit(0xAAAA);
+transmit(0xAAAA);
+
 /* sync bit / start bit instead, with easy-to-detect timing (slower) */
 PORTB=(1<<PORTB1);
 _delay_us(HALFBITTIME*4);
@@ -93,6 +102,15 @@ PORTB=0; // always end with the pin LOW
 }
 
 void transmitBYEframe(){
+
+transmit(0xAAAA); /* re-introduce pre-amble to see if that positively influences receiver timing somehow?*/
+transmit(0xAAAA);
+transmit(0xAAAA);
+transmit(0xAAAA);
+transmit(0xAAAA);
+transmit(0xAAAA);
+transmit(0xAAAA);
+
 /* sync bit / start bit instead, with easy-to-detect timing (slower) */
 PORTB=(1<<PORTB1);
 _delay_us(HALFBITTIME*4);
