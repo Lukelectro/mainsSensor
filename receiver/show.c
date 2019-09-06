@@ -128,11 +128,10 @@ lcd_cls();     // clear lcd so devices that are now OFF are not still displayed
 // turn backlite on if there is still devices ON, and off otherwise.
 // also, display names of devices still ON if there are devices still ON, otherwise display a message saying all is OFF.
     if(numOn>0){ 
-        
+        lcd_puts("Mogelijk nog aan: ");
         PORTC |= (1<<PORTC3); 
         itoa(numOn,buffer,10);
         lcd_puts(buffer);
-        if(numOn==1) lcd_puts(" ding nog aan"); else lcd_puts(" dingen nog aan");
         lcd_goto(1,0);
 // Display NAMES of devices still on:
         num = 1;

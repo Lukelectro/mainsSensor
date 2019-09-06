@@ -56,15 +56,12 @@ uart_release();/* LCD on same port as serial...*/
 lcd_init();
 lcd_cursor(false,false);
 lcd_goto(0,0);
-lcd_puts("Hallo Wereld! l1");
+lcd_puts("MainsSensor Receiver");
 lcd_goto(1,0);
-lcd_puts("line 2");
+lcd_puts("MakerSpaceLeiden");
 //lcd_goto(0,20); //actually 3,0, but 4x20 display is implemented as 2x40... So modified LCD.C instead
-lcd_goto(2,0);
-lcd_puts("line 3");
-//lcd_goto(1,20); //actually 4,0, but 4x20 display is implemented as 2x40...
 lcd_goto(3,0);
-lcd_puts("line 4");
+lcd_puts("LJPV 2019");
 _delay_ms(1000);
 reenableuart(); /* LCD on same port as serial...*/
 
@@ -102,8 +99,7 @@ reenableuart(); /* LCD on same port as serial...*/
 
         break;
         case PROCESS: // proces rec'd data
-            // TODO: actually check received CRC, instead of only just buffering it. (if(crcgood){ updatedevice else nothing} retry)
-            updateDevice(ID,MSG);            
+            updateDevice(ID,MSG, crc);            
             rec_st=START; // and wait for sync again.
         break;
         default:

@@ -1,12 +1,23 @@
 #include "proces.h"
 #include <string.h>
+#include <util/crc16.h>
 
-void updateDevice(uint16_t ID, uint8_t MSG){
+void updateDevice(uint16_t ID, uint8_t MSG, uint8_t crc){
 // find device in array and update it, and if it's not there, add it.
 unsigned int pntr;
+uint8_t calccrc=0;
 uint8_t processed=0; // is this device allready updated?  
 
-/* first check if this device ID is seen before allready. if it is, update its status (and set processed to 1)*/ 
+/* first, calculated and compare CRC - if crc is ok, proces device, otherwise, skip it */
+calccrc = _crc8_ccitt_update(calccrc,((ID>>8)&0xFF)); // first bit of ID
+calccrc = _crc8_ccitt_update(calccrc,(ID&0xFF));      // 2nd bit of ID
+calccrc = _crc8_ccitt_update(calccrc,MSG);                // msg
+
+    if(calccrc != crc){
+        return; // if crc's don't match, return withouth processing the new device
+    }
+
+/* check if this device ID is seen before allready. if it is, update its status (and set processed to 1)*/ 
     for(pntr=0;pntr<numdevs;pntr++){
         if(ID==devices[pntr].ID){
             devices[pntr].lastseen = now;
