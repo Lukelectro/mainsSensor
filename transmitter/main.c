@@ -77,10 +77,10 @@ uint8_t i=0;
      _delay_us(HALFBITTIME); // at 128 KHz clock delay is needed. At 16 KHz clock a negative delay would be nice... So a 128 KHz clock it is.
     }while(i<16);
 }
-
+/*
 void transmitHIframe(){
 
-/* sync bit / start condition (instead of sync word) */
+// sync bit / start condition (instead of sync word) 
 PORTB=(1<<PORTB1);
 _delay_us(HALFBITTIME*4);
 PORTB=0;
@@ -95,7 +95,7 @@ PORTB=0; // always end with the pin LOW
 
 void transmitBYEframe(){
 
-/* sync bit / start condition */
+// sync bit / start condition
 PORTB=(1<<PORTB1);
 _delay_us(HALFBITTIME*4);
 PORTB=0;
@@ -104,10 +104,33 @@ _delay_us(HALFBITTIME*4);
 transmit(IDH); // MSB first
 transmit(IDL);
 transmit(0x5555); // Bye=0x00, in manchester 0b0101 0101 0101 0101 (0x5555) 
-//transmit(0xAAAA); // because transmitHIframe works and transmitBYEframe doesn't, let's see what happens if there is no difference
 transmit(MBYEcrc);
 PORTB=0; // always end with the pin LOW
 }
+*/
+
+
+/* Then, lets make it one function, so timing might degrade, but then for both Hi and Bye in the same way */
+void transmitframe(uint8_t HiBYE){
+
+/* sync bit / start condition */
+PORTB=(1<<PORTB1);
+_delay_us(HALFBITTIME*4);
+PORTB=0;
+_delay_us(HALFBITTIME*4);
+  
+transmit(IDH); // MSB first
+transmit(IDL);
+    if(HiBYE){
+        transmit(0xAAAA); // HI = 0xFF, in manchester 0b1010 1010 1010 1010 (0xAAAA)    
+        transmit(MHIcrc);
+    }else
+    {
+        transmit(0x5555); // Bye=0x00, in manchester 0b0101 0101 0101 0101 (0x5555)     
+        transmit(MBYEcrc);
+    };
+PORTB=0; // always end with the pin LOW
+};
 
 
 int main(void){
@@ -164,7 +187,8 @@ sei(); // Enable interupts after PB2 is high
 
 while(1){   // re-transmit HI message 4 times every minute / repeat untill powerdown.
     for (uint8_t i=0;i<4;i++){
-       transmitHIframe();    
+       //transmitHIframe();
+        transmitframe(1);
        _delay_ms(3);
     }
     _delay_ms(30000); 
@@ -182,7 +206,8 @@ ISR(INT0_vect){ //note INT0 is on PB2
 
 // if PB2 is low, power failed / is going down, so transmit goodbye message on bulk capacitor charge
     do{
-        transmitBYEframe(); 
+        //transmitBYEframe();
+        transmitframe(0); 
         _delay_ms(3); // give reciever a bit of time (to optionally proces an error and wait for syncbit again)
     }while((PINB&(1<<PINB2))==0); // until power goes out or returns.
 }
