@@ -80,15 +80,7 @@ uint8_t i=0;
 
 void transmitHIframe(){
 
-transmit(0xAAAA); /* re-introduce pre-amble to see if that positively influences receiver timing somehow?*/
-transmit(0xAAAA);
-transmit(0xAAAA);
-transmit(0xAAAA);
-transmit(0xAAAA);
-transmit(0xAAAA);
-transmit(0xAAAA);
-
-/* sync bit / start bit instead, with easy-to-detect timing (slower) */
+/* sync bit / start condition (instead of sync word) */
 PORTB=(1<<PORTB1);
 _delay_us(HALFBITTIME*4);
 PORTB=0;
@@ -103,15 +95,7 @@ PORTB=0; // always end with the pin LOW
 
 void transmitBYEframe(){
 
-transmit(0xAAAA); /* re-introduce pre-amble to see if that positively influences receiver timing somehow?*/
-transmit(0xAAAA);
-transmit(0xAAAA);
-transmit(0xAAAA);
-transmit(0xAAAA);
-transmit(0xAAAA);
-transmit(0xAAAA);
-
-/* sync bit / start bit instead, with easy-to-detect timing (slower) */
+/* sync bit / start condition */
 PORTB=(1<<PORTB1);
 _delay_us(HALFBITTIME*4);
 PORTB=0;
@@ -169,15 +153,20 @@ _delay_ms(5000); // and slightly longer, because input flips before it is full e
 
 sei(); // Enable interupts after PB2 is high
 
-transmitHIframe(); // transmit powerup message
-_delay_ms(5000);   // next one in 5 s.
-transmitHIframe(); // transmit powerup message
-_delay_ms(5000);   // next one in 5 s.
+/* no longer using the 0xFF preamble, so can transmit the actual message more often, so will transmit the actual message more often .
+*  In fact, receiver catches repeated messages better, because sometimes noise gets seen as a start condition and it only gets half a message if it isn't repeated
+* also, timing seems to somehow get more reliable if transmitter is transmitting for longer (?!?).
+*
+* 1 msg = 32 bits at 200 us - in practice more like 300 us. 32*300us = 9600us , so about 10ms per message. 
+* Band E, 433-434Mhz max 10 mW max 10% dutycycle, so in a minute (60 s) max 6s worth of messages. 8 messages a minute = 80ms << 6s, so that's OK with quite a margin.
+* (Brochure vergunningsvrije radiotoepassingen, tabel 1, februari 2012)
+*/
 
-while(1){   // re-transmit HI message every half a minute / repeat untill powerdown.
-    transmitHIframe();    
-    _delay_ms(100);
-    transmitHIframe();    // no longer using the 0xFF preamble, so can transmit the actual message more often, so will transmit the actual message more often    
+while(1){   // re-transmit HI message 4 times every minute / repeat untill powerdown.
+    for (uint8_t i=0;i<4;i++){
+       transmitHIframe();    
+       _delay_ms(3);
+    }
     _delay_ms(30000); 
     //_delay_ms(5000); // or test with 5s...
     }
