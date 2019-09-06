@@ -14,7 +14,8 @@ calccrc = _crc8_ccitt_update(calccrc,(ID&0xFF));      // 2nd bit of ID
 calccrc = _crc8_ccitt_update(calccrc,MSG);                // msg
 
     if(calccrc != crc){
-        return; // if crc's don't match, return withouth processing the new device
+        //return; // if crc's don't match, return withouth processing the new device
+    /* crc check disabled, because otherwise BYE msg gets missed somehow. possibly CRC not calculated corretly on either side of transmission?*/
     }
 
 /* check if this device ID is seen before allready. if it is, update its status (and set processed to 1)*/ 
