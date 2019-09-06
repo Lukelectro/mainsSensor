@@ -6,7 +6,7 @@
  * otherwise only record new devices that are ON, so OFF messages only get accepted from devices that where ON previously and garbled messages get ignored 
  * also shows these in serial output
  */
-#define LOG_ALL 
+//#define LOG_ALL 
 
 #define reenableuart() uart_init(UART_BAUD_SELECT(UART_BAUD_RATE,F_CPU)) /* because LCD and UART are on the same port*/
 
