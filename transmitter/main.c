@@ -111,7 +111,7 @@ PORTB=0; // always end with the pin LOW
 
 
 /* Then, lets make it one function, so timing might degrade, but then for both Hi and Bye in the same way */
-void transmitframe(uint8_t HiBYE){
+volatile void transmitframe(uint8_t HiBYE){
 
 /* sync bit / start condition */
 PORTB=(1<<PORTB1);
