@@ -104,7 +104,6 @@ _delay_us(HALFBITTIME*4);
 transmit(IDH); // MSB first
 transmit(IDL);
 transmit(0x5555); // Bye=0x00, in manchester 0b0101 0101 0101 0101 (0x5555) 
-//transmit(0xAAAA); // because transmitHIframe works and transmitBYEframe doesn't, let's see what happens if there is no difference
 transmit(MBYEcrc);
 PORTB=0; // always end with the pin LOW
 }
