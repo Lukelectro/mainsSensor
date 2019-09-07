@@ -24,7 +24,7 @@
 // uses crc8 with 0 as initial value and Polynomial: x^8 + x^2 + x + 1 (0xE0).
 
 
-uint16_t ID_16b = 0xA42A;   // Input ID here (TODO: put it at a fixed address in flash and change the .hex just before programming).
+uint16_t ID_16b = 0x89AB;   // Input ID here (TODO: put it at a fixed address in flash and change the .hex just before programming).
 uint8_t HIcrc=0, BYEcrc=0;  // crc for hi-message and Bye-message, before conversion to manchester encoding
 uint16_t MHIcrc, MBYEcrc;   // crc's after conversion to manchester encoding
 uint16_t IDH, IDL; // manchester-encoded ID split in 16 bit units, so this is not done at transmit time but before.
@@ -111,7 +111,7 @@ PORTB=0; // always end with the pin LOW
 
 
 /* Then, lets make it one function, so timing might degrade, but then for both Hi and Bye in the same way */
-volatile void transmitframe(uint8_t HiBYE){
+void transmitframe(uint8_t HiBYE){
 
 /* sync bit / start condition */
 PORTB=(1<<PORTB1);
@@ -134,6 +134,10 @@ PORTB=0; // always end with the pin LOW
 
 
 int main(void){
+RSTFLR = 0 ; // clear reset flags (Because WDRF overrides WDE, so clear WDRF)
+CCP = 0xD8; // enable write of protected registers
+WDTCSR=0x00; // disable WDT
+
 DDRB|=(1<<PORTB1); // PORTB1 output
 PORTB=0; // start with the pin LOW
 
@@ -197,12 +201,11 @@ while(1){   // re-transmit HI message 4 times every minute / repeat untill power
 }
 
 
-ISR(BADISR_vect)
-{
-    // just reset, but have this here so I could in theory add a handler
-}
+ISR(INT0_vect, ISR_NAKED){ //note INT0 is on PB2 
+// To save on RAM and STACK (and prevent collision), declare ISR as "naked", so no context save or restore gets added by the compiler.
+// then, after ISR, don't reti, but reset, so all mangled variables and registers get reset.
 
-ISR(INT0_vect){ //note INT0 is on PB2 
+    WDTCSR = 0x0F; // enable WDT while there still sure is power, set it to timeout after 2s (plenty of time to transmit multiple messages)
 
 // if PB2 is low, power failed / is going down, so transmit goodbye message on bulk capacitor charge
     do{
@@ -210,4 +213,6 @@ ISR(INT0_vect){ //note INT0 is on PB2
         transmitframe(0); 
         _delay_ms(3); // give reciever a bit of time (to optionally proces an error and wait for syncbit again)
     }while((PINB&(1<<PINB2))==0); // until power goes out or returns.
+    // if power returned, do a reset, by waiting for WDT timeout
+    while(1);
 }
